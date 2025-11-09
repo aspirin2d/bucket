@@ -10,37 +10,79 @@ import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { config } from "./config.js";
 
 export const downloadOriginVideo = async (originUrl: string) => {
-  const response = await fetch(originUrl);
-  if (!response.ok || !response.body) {
-    throw new Error(
-      `Failed to download origin video: ${response.status} ${response.statusText}`,
-    );
-  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    config.video.downloadTimeoutMs,
+  );
 
-  const tempDir = await mkdtemp(path.join(tmpdir(), config.tmpDirPrefix));
-  const fileName = path.basename(new URL(originUrl).pathname) || "origin.mp4";
-  const filePath = path.join(tempDir, fileName);
-  const webStream = response.body as NodeReadableStream<Uint8Array>;
-  await pipeline(Readable.fromWeb(webStream), createWriteStream(filePath));
-  return { tempDir, filePath };
+  try {
+    const response = await fetch(originUrl, { signal: controller.signal });
+    if (!response.ok || !response.body) {
+      throw new Error(
+        `Failed to download origin video: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    // Validate content length if provided
+    const contentLength = response.headers.get("content-length");
+    if (contentLength) {
+      const sizeMB = parseInt(contentLength, 10) / (1024 * 1024);
+      if (sizeMB > config.video.maxDownloadSizeMB) {
+        throw new Error(
+          `Video file too large: ${sizeMB.toFixed(1)}MB exceeds limit of ${config.video.maxDownloadSizeMB}MB`,
+        );
+      }
+    }
+
+    const tempDir = await mkdtemp(path.join(tmpdir(), config.tmpDirPrefix));
+    const fileName = path.basename(new URL(originUrl).pathname) || "origin.mp4";
+    const filePath = path.join(tempDir, fileName);
+    const webStream = response.body as NodeReadableStream<Uint8Array>;
+    await pipeline(Readable.fromWeb(webStream), createWriteStream(filePath));
+    return { tempDir, filePath };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 };
 
 export const downloadAnimationBinary = async (
   originUrl: string,
   tempDir: string,
 ) => {
-  const response = await fetch(originUrl);
-  if (!response.ok || !response.body) {
-    throw new Error(
-      `Failed to download origin animation: ${response.status} ${response.statusText}`,
-    );
-  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    config.video.downloadTimeoutMs,
+  );
 
-  const fileName = path.basename(new URL(originUrl).pathname) || "origin.bin";
-  const filePath = path.join(tempDir, fileName);
-  const webStream = response.body as NodeReadableStream<Uint8Array>;
-  await pipeline(Readable.fromWeb(webStream), createWriteStream(filePath));
-  return filePath;
+  try {
+    const response = await fetch(originUrl, { signal: controller.signal });
+    if (!response.ok || !response.body) {
+      throw new Error(
+        `Failed to download origin animation: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    // Validate content length if provided
+    const contentLength = response.headers.get("content-length");
+    if (contentLength) {
+      const sizeMB = parseInt(contentLength, 10) / (1024 * 1024);
+      if (sizeMB > config.video.maxDownloadSizeMB) {
+        throw new Error(
+          `Animation file too large: ${sizeMB.toFixed(1)}MB exceeds limit of ${config.video.maxDownloadSizeMB}MB`,
+        );
+      }
+    }
+
+    const fileName = path.basename(new URL(originUrl).pathname) || "origin.bin";
+    const filePath = path.join(tempDir, fileName);
+    const webStream = response.body as NodeReadableStream<Uint8Array>;
+    await pipeline(Readable.fromWeb(webStream), createWriteStream(filePath));
+    return filePath;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 };
 
 const writeUploadedAsset = async (params: {
@@ -110,12 +152,26 @@ export const trimClip = async (params: {
     ];
 
     const ffmpeg = spawn("ffmpeg", args);
-    ffmpeg.on("error", (error) => reject(error));
+    const stderrChunks: Buffer[] = [];
+
+    // Capture stderr for better error reporting
+    ffmpeg.stderr?.on("data", (chunk: Buffer) => {
+      stderrChunks.push(chunk);
+    });
+
+    ffmpeg.on("error", (error) => {
+      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
+      const errorMessage = `FFmpeg process error: ${error.message}${stderr ? `\nStderr: ${stderr.slice(-500)}` : ""}`;
+      reject(new Error(errorMessage));
+    });
+
     ffmpeg.on("close", (code) => {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`ffmpeg exited with code ${code}`));
+        const stderr = Buffer.concat(stderrChunks).toString("utf-8");
+        const errorMessage = `FFmpeg exited with code ${code}${stderr ? `\nStderr: ${stderr.slice(-500)}` : ""}`;
+        reject(new Error(errorMessage));
       }
     });
   });

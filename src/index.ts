@@ -10,6 +10,7 @@ import { sliceAnimationBin } from "./animation.js";
 import { config } from "./config.js";
 import { ensureClipTable, persistClips } from "./db.js";
 import { embedDescriptions } from "./embeddings.js";
+import { logger } from "./logger.js";
 import { uploadPayloadSchema, type UploadPayload } from "./schemas.js";
 import { deleteObject, uploadObject } from "./upload.js";
 import {
@@ -24,12 +25,6 @@ import {
 
 const app = new Hono();
 const publicIndexPath = path.join(process.cwd(), "public", "index.html");
-const isDevEnv = process.env.NODE_ENV !== "production";
-const devLog = (...args: unknown[]) => {
-  if (isDevEnv) {
-    console.log("[upload]", ...args);
-  }
-};
 
 const parsePayload = async (req: Request): Promise<UploadPayload> => {
   const body = await req.json();
@@ -152,9 +147,10 @@ const discardUploadedObjects = async (clips: PreparedClip[]) => {
   await Promise.all(
     objectKeys.map((objectKey) =>
       deleteObject(objectKey).catch((error) => {
-        console.warn(
-          `Failed to delete uploaded object ${objectKey} during rollback`,
-          error,
+        logger.warn(
+          "upload",
+          "Failed to delete uploaded object during rollback",
+          { objectKey, error },
         );
       }),
     ),
@@ -166,14 +162,14 @@ app.get("/", async (c) => {
     const html = await readFile(publicIndexPath, "utf-8");
     return c.html(html);
   } catch (error) {
-    console.error("Failed to read public/index.html", error);
+    logger.error("harness", "Failed to read public/index.html", { error });
     return c.text("Upload harness unavailable", 500);
   }
 });
 
 app.post("/api/clips", async (c) => {
   const contentType = c.req.header("content-type") ?? "";
-  devLog("Incoming /api/clips request", { contentType });
+  logger.debug("upload", "Incoming /api/clips request", { contentType });
   let payload: UploadPayload;
   let source: { type: "file"; file: File } | { type: "url"; originUrl: string };
   let animFile: File | null = null;
@@ -184,7 +180,7 @@ app.post("/api/clips", async (c) => {
       payload = multipart.payload;
       source = { type: "file", file: multipart.file };
       animFile = multipart.animation ?? null;
-      devLog("Parsed multipart payload", {
+      logger.debug("upload", "Parsed multipart payload", {
         clips: payload.clips.length,
         hasVideoFile: true,
         hasAnimFile: Boolean(animFile),
@@ -193,7 +189,7 @@ app.post("/api/clips", async (c) => {
       if (error instanceof ZodError) {
         return c.json({ error: z.formatError(error) }, 400);
       }
-      console.error("Failed to parse multipart payload", error);
+      logger.error("upload", "Failed to parse multipart payload", { error });
       return c.json({ error: (error as Error).message }, 400);
     }
   } else {
@@ -214,12 +210,25 @@ app.post("/api/clips", async (c) => {
       );
     }
     source = { type: "url", originUrl: originUrl };
-    devLog("Parsed JSON payload", {
+    logger.debug("upload", "Parsed JSON payload", {
       clips: payload.clips.length,
       originUrl,
       animUrl: payload.anim_url,
     });
   }
+
+  // Optimize: Generate embeddings in parallel with video preparation
+  const embeddingsPromise = embedDescriptions(
+    payload.clips.map((clip) => clip.description),
+  )
+    .then((embeddings) => {
+      logger.debug("upload", "Generated embeddings", { count: embeddings.length });
+      return embeddings;
+    })
+    .catch((error) => {
+      logger.error("upload", "Failed to embed descriptions", { error });
+      throw new Error("Failed to embed descriptions");
+    });
 
   let videoUpload: Awaited<ReturnType<typeof stageUploadedVideo>> | null = null;
   let videoDownload: Awaited<ReturnType<typeof downloadOriginVideo>> | null =
@@ -227,13 +236,13 @@ app.post("/api/clips", async (c) => {
   try {
     if (source.type === "file") {
       videoUpload = await stageUploadedVideo(source.file);
-      devLog("Staged uploaded video", { tempDir: videoUpload.tempDir });
+      logger.debug("upload", "Staged uploaded video", { tempDir: videoUpload.tempDir });
     } else {
       videoDownload = await downloadOriginVideo(source.originUrl);
-      devLog("Downloaded video from origin", { originUrl: source.originUrl });
+      logger.debug("upload", "Downloaded video from origin", { originUrl: source.originUrl });
     }
   } catch (error) {
-    console.error("Failed to acquire origin video", error);
+    logger.error("upload", "Failed to acquire origin video", { error });
     return c.json({ error: "Failed to ingest origin video" }, 502);
   }
 
@@ -253,9 +262,9 @@ app.post("/api/clips", async (c) => {
         fallbackName: animFile.name || "origin.bin",
       });
       animBuffer = await readFile(stagedAnimation.filePath);
-      devLog("Staged uploaded animation", { tempDir: workspaceDir });
+      logger.debug("upload", "Staged uploaded animation", { tempDir: workspaceDir });
     } catch (error) {
-      console.error("Failed to acquire origin animation", error);
+      logger.error("upload", "Failed to acquire origin animation", { error });
       await cleanupTempDir(workspaceDir);
       return c.json({ error: "Failed to ingest origin animation" }, 502);
     }
@@ -266,53 +275,55 @@ app.post("/api/clips", async (c) => {
         workspaceDir,
       );
       animBuffer = await readFile(animPath);
-      devLog("Downloaded animation from origin", { animUrl: payload.anim_url });
+      logger.debug("upload", "Downloaded animation from origin", { animUrl: payload.anim_url });
     } catch (error) {
-      console.error("Failed to download origin animation", error);
+      logger.error("upload", "Failed to download origin animation", { error });
       await cleanupTempDir(workspaceDir);
       return c.json({ error: "Failed to ingest origin animation" }, 502);
     }
   }
 
+  // Wait for embeddings to complete
   let embeddings: number[][];
   try {
-    embeddings = await embedDescriptions(
-      payload.clips.map((clip) => clip.description),
-    );
-    devLog("Generated embeddings", { clips: payload.clips.length });
+    embeddings = await embeddingsPromise;
   } catch (error) {
-    console.error("Failed to embed descriptions", error);
     await cleanupTempDir(workspaceDir);
     return c.json({ error: "Failed to embed descriptions" }, 502);
   }
 
   const animSource = animBuffer ? { buffer: animBuffer } : null;
-  const preparedClips: PreparedClip[] = [];
+  let preparedClips: PreparedClip[] = [];
   try {
-    for (const [index, clip] of payload.clips.entries()) {
-      const embedding = embeddings[index];
-      if (!embedding) {
-        throw new Error("Missing embedding for clip");
-      }
+    // Process clips in parallel for better performance
+    logger.debug("upload", "Processing clips in parallel", { count: payload.clips.length });
+    preparedClips = await Promise.all(
+      payload.clips.map(async (clip, index) => {
+        const embedding = embeddings[index];
+        if (!embedding) {
+          throw new Error(`Missing embedding for clip at index ${index}`);
+        }
 
-      const prepared = await prepareClipArtifact({
-        clip,
-        fps: payload.fps,
-        originId: payload.origin_id,
-        sourcePath: videoFilePath,
-        tempDir: workspaceDir,
-        embedding,
-        animSource,
-      });
+        const prepared = await prepareClipArtifact({
+          clip,
+          fps: payload.fps,
+          originId: payload.origin_id,
+          sourcePath: videoFilePath,
+          tempDir: workspaceDir,
+          embedding,
+          animSource,
+        });
 
-      preparedClips.push(prepared);
-      devLog("Prepared clip artifact", {
-        index: index + 1,
-        total: payload.clips.length,
-        videoObjectKey: prepared.videoObjectKey,
-        hasAnimation: Boolean(prepared.animUrl),
-      });
-    }
+        logger.debug("upload", "Prepared clip artifact", {
+          index: index + 1,
+          total: payload.clips.length,
+          videoObjectKey: prepared.videoObjectKey,
+          hasAnimation: Boolean(prepared.animUrl),
+        });
+
+        return prepared;
+      }),
+    );
 
     const persisted = await persistClips(
       preparedClips.map((clip) => ({
@@ -325,34 +336,35 @@ app.post("/api/clips", async (c) => {
         embedding: clip.embedding,
       })),
     );
-    devLog("Persisted clips", { count: persisted.length });
+    logger.info("upload", "Persisted clips successfully", { count: persisted.length });
     return c.json({ clips: persisted });
   } catch (error) {
-    console.error("Failed to process upload", error);
+    logger.error("upload", "Failed to process upload", { error });
     if (preparedClips.length > 0) {
       await discardUploadedObjects(preparedClips);
     }
     return c.json({ error: "Failed to process upload" }, 500);
   } finally {
     await cleanupTempDir(workspaceDir);
-    devLog("Cleaned up workspace", { tempDir: workspaceDir });
+    logger.debug("upload", "Cleaned up workspace", { tempDir: workspaceDir });
   }
 });
 
 const bootstrap = async () => {
   try {
     await ensureClipTable();
+    logger.info("app", "Database tables initialized");
     serve(
       {
         fetch: app.fetch,
         port: config.port,
       },
       (info) => {
-        console.log(`Server is running on http://localhost:${info.port}`);
+        logger.info("app", `Server is running on http://localhost:${info.port}`);
       },
     );
   } catch (error) {
-    console.error("Failed to initialize application", error);
+    logger.error("app", "Failed to initialize application", { error });
     process.exit(1);
   }
 };
