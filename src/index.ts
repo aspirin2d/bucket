@@ -337,7 +337,7 @@ app.post("/api/clips", async (c) => {
         endFrame: clip.endFrame,
         description: clip.description,
         videoUrl: clip.videoUrl,
-        animUrl: clip.animationUrl,
+        animationUrl: clip.animationUrl,
         embedding: clip.embedding,
       })),
     );
