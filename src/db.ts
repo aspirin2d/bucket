@@ -5,6 +5,19 @@ import { clipSchema, type Clip } from "./schemas.js";
 
 const vectorLiteral = (values: number[]) => `[${values.join(",")}]`;
 
+const parseVector = (vectorString: string): number[] => {
+  // PostgreSQL returns vectors as strings like "[1,2,3,...]"
+  const trimmed = vectorString.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+    throw new Error(`Invalid vector format: ${vectorString}`);
+  }
+  const content = trimmed.slice(1, -1);
+  if (content.length === 0) {
+    return [];
+  }
+  return content.split(",").map((s) => parseFloat(s.trim()));
+};
+
 export const pool = new Pool({
   user: config.db.user,
   password: config.db.password,
@@ -117,9 +130,10 @@ export const getClipsByOriginId = async (
     [originId],
   );
 
-  return res.rows.map((row) =>
-    parseClipRow(row, row.embedding as unknown as number[]),
-  );
+  return res.rows.map((row) => {
+    const embedding = parseVector(row.embedding as string);
+    return parseClipRow(row, embedding);
+  });
 };
 
 export const deleteClipsByOriginId = async (originId: string) => {
