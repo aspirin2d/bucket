@@ -11,6 +11,7 @@ import { config } from "./config.js";
 import {
   deleteClipsByOriginId,
   ensureClipTable,
+  getAllClips,
   getClipsByOriginId,
   persistClips,
 } from "./db.js";
@@ -189,6 +190,31 @@ app.get("/", async (c) => {
   } catch (error) {
     logger.error("harness", "Failed to read public/index.html", { error });
     return c.text("Upload harness unavailable", 500);
+  }
+});
+
+app.get("/api/clips", async (c) => {
+  try {
+    const limit = Math.min(
+      parseInt(c.req.query("limit") ?? "10", 10),
+      100,
+    );
+    const offset = Math.max(parseInt(c.req.query("offset") ?? "0", 10), 0);
+
+    const result = await getAllClips({ limit, offset });
+
+    return c.json({
+      clips: result.clips,
+      pagination: {
+        total: result.total,
+        limit,
+        offset,
+        hasMore: offset + limit < result.total,
+      },
+    });
+  } catch (error) {
+    logger.error("clips", "Failed to fetch clips", { error });
+    return c.json({ error: "Failed to fetch clips" }, 500);
   }
 });
 

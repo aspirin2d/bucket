@@ -346,6 +346,68 @@
       .video-modal-close:hover {
         background: #fff;
       }
+      .database-section {
+        margin-top: 2rem;
+      }
+      .database-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      .database-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #1a1a1a;
+        margin: 0;
+      }
+      .database-count {
+        font-size: 0.875rem;
+        color: #6b7280;
+      }
+      .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        padding: 1rem;
+        background: #f9fafb;
+        border-top: 1px solid #e5e7eb;
+        border-radius: 0 0 8px 8px;
+      }
+      .pagination-info {
+        font-size: 0.875rem;
+        color: #6b7280;
+        margin: 0 0.5rem;
+      }
+      .pagination button {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+      }
+      .pagination button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-secondary {
+        background: #6b7280;
+        color: #fff;
+      }
+      .btn-secondary:hover:not(:disabled) {
+        background: #4b5563;
+      }
+      .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #9ca3af;
+      }
+      .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+      }
+      .empty-state-text {
+        font-size: 0.875rem;
+      }
       @media (max-width: 768px) {
         .form-grid, .clip-grid {
           grid-template-columns: 1fr;
@@ -412,6 +474,23 @@
         </div>
         <div id="response-body" class="response-body">
           <div class="response-empty">(awaiting request)</div>
+        </div>
+      </div>
+
+      <div class="database-section">
+        <div class="database-header">
+          <h2 class="database-title">Uploaded Clips</h2>
+          <span id="database-count" class="database-count">Loading...</span>
+        </div>
+        <div class="response-panel">
+          <div id="database-clips" class="response-body">
+            <div class="response-empty">Loading clips...</div>
+          </div>
+          <div id="pagination" class="pagination" style="display: none;">
+            <button id="prev-page" class="btn-secondary" disabled>Previous</button>
+            <span id="pagination-info" class="pagination-info">Page 1</span>
+            <button id="next-page" class="btn-secondary">Next</button>
+          </div>
         </div>
       </div>
     </div>
@@ -567,6 +646,9 @@
         if (clip.created_at) {
           meta.append(createField("Created", formatTimestamp(clip.created_at)));
         }
+        if (clip.updated_at) {
+          meta.append(createField("Updated", formatTimestamp(clip.updated_at)));
+        }
         card.append(meta);
 
         const desc = document.createElement("p");
@@ -717,6 +799,10 @@
               tone: res.ok ? "success" : "error",
               bodyNode: renderResponsePayload(parsed),
             });
+            // Refresh the database clips after successful upload
+            if (res.ok) {
+              loadDatabaseClips();
+            }
           } catch (_) {
             setResponse({
               status: res.ok ? `Success (${res.status})` : `Error (${res.status})`,
@@ -735,6 +821,82 @@
           submitButton.textContent = "Upload Clips";
         }
       });
+
+      // Pagination state
+      let currentPage = 1;
+      const itemsPerPage = 10;
+      const databaseClipsEl = document.getElementById("database-clips");
+      const databaseCountEl = document.getElementById("database-count");
+      const paginationEl = document.getElementById("pagination");
+      const paginationInfoEl = document.getElementById("pagination-info");
+      const prevPageBtn = document.getElementById("prev-page");
+      const nextPageBtn = document.getElementById("next-page");
+
+      const loadDatabaseClips = async () => {
+        try {
+          const offset = (currentPage - 1) * itemsPerPage;
+          const res = await fetch(`/api/clips?limit=${itemsPerPage}&offset=${offset}`);
+
+          if (!res.ok) {
+            throw new Error(`Failed to fetch clips: ${res.status}`);
+          }
+
+          const data = await res.json();
+
+          // Update count
+          databaseCountEl.textContent = `${data.pagination.total} total clip${data.pagination.total === 1 ? "" : "s"}`;
+
+          // Render clips
+          if (data.clips.length === 0) {
+            databaseClipsEl.innerHTML = `
+              <div class="empty-state">
+                <div class="empty-state-icon">📹</div>
+                <div class="empty-state-text">No clips uploaded yet. Upload some clips above to get started!</div>
+              </div>
+            `;
+            paginationEl.style.display = "none";
+          } else {
+            const grid = document.createElement("div");
+            grid.className = "response-grid";
+            data.clips.forEach((clip, index) => {
+              const globalIndex = offset + index;
+              grid.append(createClipCard(clip, globalIndex));
+            });
+            databaseClipsEl.innerHTML = "";
+            databaseClipsEl.append(grid);
+
+            // Update pagination controls
+            const totalPages = Math.ceil(data.pagination.total / itemsPerPage);
+            paginationInfoEl.textContent = `Page ${currentPage} of ${totalPages}`;
+            prevPageBtn.disabled = currentPage === 1;
+            nextPageBtn.disabled = !data.pagination.hasMore;
+            paginationEl.style.display = "flex";
+          }
+        } catch (error) {
+          databaseClipsEl.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">⚠️</div>
+              <div class="empty-state-text">Failed to load clips: ${error instanceof Error ? error.message : String(error)}</div>
+            </div>
+          `;
+          paginationEl.style.display = "none";
+        }
+      };
+
+      prevPageBtn.addEventListener("click", () => {
+        if (currentPage > 1) {
+          currentPage--;
+          loadDatabaseClips();
+        }
+      });
+
+      nextPageBtn.addEventListener("click", () => {
+        currentPage++;
+        loadDatabaseClips();
+      });
+
+      // Load clips on page load
+      loadDatabaseClips();
     </script>
   </body>
 </html>
