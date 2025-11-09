@@ -26,6 +26,15 @@ import {
 const app = new Hono();
 const publicIndexPath = path.join(process.cwd(), "public", "index.html");
 
+type VideoSourceInput =
+  | { type: "file"; file: File }
+  | { type: "url"; originUrl: string };
+
+type WorkspaceResult = {
+  workDir: string;
+  filePath: string;
+};
+
 const parsePayload = async (req: Request): Promise<UploadPayload> => {
   const body = await req.json();
   return uploadPayloadSchema.parse(body);
@@ -69,34 +78,34 @@ const parseMultipartPayload = async (
   return { payload, file: fileField, animation };
 };
 
-type PreparedClip = {
+type ProcessedClip = {
   originId: string;
   startFrame: number;
   endFrame: number;
   description: string;
   videoUrl: string;
   videoObjectKey: string;
-  animUrl: string | null;
-  animObjectKey: string | null;
+  animationUrl: string | null;
+  animationObjectKey: string | null;
   embedding: number[];
 };
 
-const prepareClipArtifact = async (params: {
+const processClip = async (params: {
   clip: UploadPayload["clips"][number];
   fps: number;
   originId: string;
-  sourcePath: string;
-  tempDir: string;
+  videoSourcePath: string;
+  workDir: string;
   embedding: number[];
-  animSource?: { buffer: Uint8Array } | null;
-}): Promise<PreparedClip> => {
-  const { clip, fps, originId, sourcePath, tempDir, embedding, animSource } =
+  animationBuffer?: Uint8Array | null;
+}): Promise<ProcessedClip> => {
+  const { clip, fps, originId, videoSourcePath, workDir, embedding, animationBuffer } =
     params;
   const assetId = randomUUID();
-  const trimmedVideoPath = path.join(tempDir, `${assetId}.mp4`);
+  const trimmedVideoPath = path.join(workDir, `${assetId}.mp4`);
 
   await trimClip({
-    inputPath: sourcePath,
+    inputPath: videoSourcePath,
     outputPath: trimmedVideoPath,
     startSeconds: clip.start_frame / fps,
     endSeconds: clip.end_frame / fps,
@@ -109,21 +118,21 @@ const prepareClipArtifact = async (params: {
   );
   await deleteFile(trimmedVideoPath);
 
-  let animUrl: string | null = null;
-  let animObjectKey: string | null = null;
-  if (animSource?.buffer) {
+  let animationUrl: string | null = null;
+  let animationObjectKey: string | null = null;
+  if (animationBuffer) {
     const lastFrame = Math.max(clip.start_frame, clip.end_frame - 1);
-    const trimmedAnimBytes = sliceAnimationBin(
-      animSource.buffer,
+    const trimmedAnimationBytes = sliceAnimationBin(
+      animationBuffer,
       clip.start_frame,
       lastFrame,
     );
-    const animPath = path.join(tempDir, `${assetId}.bin`);
-    await writeFile(animPath, trimmedAnimBytes);
-    animObjectKey = `animations/${originId}/${assetId}.bin`;
-    const { url } = await uploadObject(animObjectKey, animPath);
-    animUrl = url;
-    await deleteFile(animPath);
+    const animationPath = path.join(workDir, `${assetId}.bin`);
+    await writeFile(animationPath, trimmedAnimationBytes);
+    animationObjectKey = `animations/${originId}/${assetId}.bin`;
+    const { url } = await uploadObject(animationObjectKey, animationPath);
+    animationUrl = url;
+    await deleteFile(animationPath);
   }
 
   return {
@@ -133,15 +142,15 @@ const prepareClipArtifact = async (params: {
     description: clip.description,
     videoUrl,
     videoObjectKey,
-    animUrl,
-    animObjectKey,
+    animationUrl,
+    animationObjectKey,
     embedding,
   };
 };
 
-const discardUploadedObjects = async (clips: PreparedClip[]) => {
+const discardUploadedObjects = async (clips: ProcessedClip[]) => {
   const objectKeys = clips
-    .flatMap((clip) => [clip.videoObjectKey, clip.animObjectKey])
+    .flatMap((clip) => [clip.videoObjectKey, clip.animationObjectKey])
     .filter((key): key is string => Boolean(key));
 
   await Promise.all(
@@ -171,19 +180,19 @@ app.post("/api/clips", async (c) => {
   const contentType = c.req.header("content-type") ?? "";
   logger.debug("upload", "Incoming /api/clips request", { contentType });
   let payload: UploadPayload;
-  let source: { type: "file"; file: File } | { type: "url"; originUrl: string };
-  let animFile: File | null = null;
+  let videoSourceInput: VideoSourceInput;
+  let animationFile: File | null = null;
 
   if (contentType.includes("multipart/form-data")) {
     try {
       const multipart = await parseMultipartPayload(c.req.raw);
       payload = multipart.payload;
-      source = { type: "file", file: multipart.file };
-      animFile = multipart.animation ?? null;
+      videoSourceInput = { type: "file", file: multipart.file };
+      animationFile = multipart.animation ?? null;
       logger.debug("upload", "Parsed multipart payload", {
         clips: payload.clips.length,
         hasVideoFile: true,
-        hasAnimFile: Boolean(animFile),
+        hasAnimationFile: Boolean(animationFile),
       });
     } catch (error) {
       if (error instanceof ZodError) {
@@ -209,11 +218,11 @@ app.post("/api/clips", async (c) => {
         400,
       );
     }
-    source = { type: "url", originUrl: originUrl };
+    videoSourceInput = { type: "url", originUrl };
     logger.debug("upload", "Parsed JSON payload", {
       clips: payload.clips.length,
       originUrl,
-      animUrl: payload.anim_url,
+      animationUrl: payload.anim_url,
     });
   }
 
@@ -230,55 +239,52 @@ app.post("/api/clips", async (c) => {
       throw new Error("Failed to embed descriptions");
     });
 
-  let videoUpload: Awaited<ReturnType<typeof stageUploadedVideo>> | null = null;
-  let videoDownload: Awaited<ReturnType<typeof downloadOriginVideo>> | null =
-    null;
+  // Acquire video source (uploaded file or remote URL)
+  let workspace: WorkspaceResult;
   try {
-    if (source.type === "file") {
-      videoUpload = await stageUploadedVideo(source.file);
-      logger.debug("upload", "Staged uploaded video", { tempDir: videoUpload.tempDir });
+    if (videoSourceInput.type === "file") {
+      const result = await stageUploadedVideo(videoSourceInput.file);
+      workspace = { workDir: result.tempDir, filePath: result.filePath };
+      logger.debug("upload", "Staged uploaded video", { workDir: workspace.workDir });
     } else {
-      videoDownload = await downloadOriginVideo(source.originUrl);
-      logger.debug("upload", "Downloaded video from origin", { originUrl: source.originUrl });
+      const result = await downloadOriginVideo(videoSourceInput.originUrl);
+      workspace = { workDir: result.tempDir, filePath: result.filePath };
+      logger.debug("upload", "Downloaded video from origin", { originUrl: videoSourceInput.originUrl });
     }
   } catch (error) {
-    logger.error("upload", "Failed to acquire origin video", { error });
+    logger.error("upload", "Failed to acquire video source", { error });
     return c.json({ error: "Failed to ingest origin video" }, 502);
   }
 
-  const videoSource = videoUpload ?? videoDownload;
-  if (!videoSource) {
-    return c.json({ error: "Failed to ingest origin video" }, 502);
-  }
+  const { workDir, filePath: videoSourcePath } = workspace;
 
-  const { tempDir: workspaceDir, filePath: videoFilePath } = videoSource;
-
-  let animBuffer: Uint8Array | null = null;
-  if (animFile) {
+  // Acquire animation source if provided
+  let animationBuffer: Uint8Array | null = null;
+  if (animationFile) {
     try {
       const stagedAnimation = await stageUploadedBinary({
-        file: animFile,
-        tempDir: workspaceDir,
-        fallbackName: animFile.name || "origin.bin",
+        file: animationFile,
+        tempDir: workDir,
+        fallbackName: animationFile.name || "origin.bin",
       });
-      animBuffer = await readFile(stagedAnimation.filePath);
-      logger.debug("upload", "Staged uploaded animation", { tempDir: workspaceDir });
+      animationBuffer = await readFile(stagedAnimation.filePath);
+      logger.debug("upload", "Staged uploaded animation", { workDir });
     } catch (error) {
-      logger.error("upload", "Failed to acquire origin animation", { error });
-      await cleanupTempDir(workspaceDir);
+      logger.error("upload", "Failed to stage animation file", { error });
+      await cleanupTempDir(workDir);
       return c.json({ error: "Failed to ingest origin animation" }, 502);
     }
   } else if (payload.anim_url) {
     try {
-      const animPath = await downloadAnimationBinary(
+      const animationPath = await downloadAnimationBinary(
         payload.anim_url,
-        workspaceDir,
+        workDir,
       );
-      animBuffer = await readFile(animPath);
-      logger.debug("upload", "Downloaded animation from origin", { animUrl: payload.anim_url });
+      animationBuffer = await readFile(animationPath);
+      logger.debug("upload", "Downloaded animation from origin", { animationUrl: payload.anim_url });
     } catch (error) {
-      logger.error("upload", "Failed to download origin animation", { error });
-      await cleanupTempDir(workspaceDir);
+      logger.error("upload", "Failed to download animation file", { error });
+      await cleanupTempDir(workDir);
       return c.json({ error: "Failed to ingest origin animation" }, 502);
     }
   }
@@ -288,65 +294,64 @@ app.post("/api/clips", async (c) => {
   try {
     embeddings = await embeddingsPromise;
   } catch (error) {
-    await cleanupTempDir(workspaceDir);
+    await cleanupTempDir(workDir);
     return c.json({ error: "Failed to embed descriptions" }, 502);
   }
 
-  const animSource = animBuffer ? { buffer: animBuffer } : null;
-  let preparedClips: PreparedClip[] = [];
+  // Process all clips in parallel for better performance
+  let processedClips: ProcessedClip[] = [];
   try {
-    // Process clips in parallel for better performance
     logger.debug("upload", "Processing clips in parallel", { count: payload.clips.length });
-    preparedClips = await Promise.all(
+    processedClips = await Promise.all(
       payload.clips.map(async (clip, index) => {
         const embedding = embeddings[index];
         if (!embedding) {
           throw new Error(`Missing embedding for clip at index ${index}`);
         }
 
-        const prepared = await prepareClipArtifact({
+        const processed = await processClip({
           clip,
           fps: payload.fps,
           originId: payload.origin_id,
-          sourcePath: videoFilePath,
-          tempDir: workspaceDir,
+          videoSourcePath,
+          workDir,
           embedding,
-          animSource,
+          animationBuffer,
         });
 
-        logger.debug("upload", "Prepared clip artifact", {
+        logger.debug("upload", "Processed clip", {
           index: index + 1,
           total: payload.clips.length,
-          videoObjectKey: prepared.videoObjectKey,
-          hasAnimation: Boolean(prepared.animUrl),
+          videoObjectKey: processed.videoObjectKey,
+          hasAnimation: Boolean(processed.animationUrl),
         });
 
-        return prepared;
+        return processed;
       }),
     );
 
     const persisted = await persistClips(
-      preparedClips.map((clip) => ({
+      processedClips.map((clip) => ({
         originId: clip.originId,
         startFrame: clip.startFrame,
         endFrame: clip.endFrame,
         description: clip.description,
         videoUrl: clip.videoUrl,
-        animUrl: clip.animUrl,
+        animUrl: clip.animationUrl,
         embedding: clip.embedding,
       })),
     );
     logger.info("upload", "Persisted clips successfully", { count: persisted.length });
     return c.json({ clips: persisted });
   } catch (error) {
-    logger.error("upload", "Failed to process upload", { error });
-    if (preparedClips.length > 0) {
-      await discardUploadedObjects(preparedClips);
+    logger.error("upload", "Failed to process clips", { error });
+    if (processedClips.length > 0) {
+      await discardUploadedObjects(processedClips);
     }
     return c.json({ error: "Failed to process upload" }, 500);
   } finally {
-    await cleanupTempDir(workspaceDir);
-    logger.debug("upload", "Cleaned up workspace", { tempDir: workspaceDir });
+    await cleanupTempDir(workDir);
+    logger.debug("upload", "Cleaned up workspace", { workDir });
   }
 });
 
