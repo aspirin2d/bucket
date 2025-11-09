@@ -30,3 +30,36 @@ export const deleteObject = async (objectKey: string) => {
     }
   }
 };
+
+export const deleteObjectsByOriginId = async (originId: string) => {
+  const prefixes = [`clips/${originId}/`, `animations/${originId}/`];
+  const deletedKeys: string[] = [];
+
+  for (const prefix of prefixes) {
+    let continuationToken: string | undefined;
+
+    do {
+      const result = await store.list(
+        {
+          prefix,
+          "max-keys": 1000,
+          marker: continuationToken,
+        },
+        {},
+      );
+
+      const objects = result.objects || [];
+      if (objects.length > 0) {
+        const keys = objects.map((obj) => obj.name);
+
+        // Delete in batches (OSS supports up to 1000 objects per deleteMulti call)
+        await store.deleteMulti(keys, { quiet: true });
+        deletedKeys.push(...keys);
+      }
+
+      continuationToken = result.nextMarker;
+    } while (continuationToken);
+  }
+
+  return deletedKeys;
+};

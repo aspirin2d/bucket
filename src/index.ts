@@ -8,11 +8,20 @@ import z, { ZodError } from "zod";
 
 import { sliceAnimationBin } from "./animation.js";
 import { config } from "./config.js";
-import { ensureClipTable, persistClips } from "./db.js";
+import {
+  deleteClipsByOriginId,
+  ensureClipTable,
+  getClipsByOriginId,
+  persistClips,
+} from "./db.js";
 import { embedDescriptions } from "./embeddings.js";
 import { logger } from "./logger.js";
 import { uploadPayloadSchema, type UploadPayload } from "./schemas.js";
-import { deleteObject, uploadObject } from "./upload.js";
+import {
+  deleteObject,
+  deleteObjectsByOriginId,
+  uploadObject,
+} from "./upload.js";
 import {
   cleanupTempDir,
   deleteFile,
@@ -311,6 +320,38 @@ app.post("/api/clips", async (c) => {
   } catch (error) {
     await cleanupTempDir(workDir);
     return c.json({ error: "Failed to embed descriptions" }, 502);
+  }
+
+  // Check if origin_id already exists and clean up old records
+  try {
+    const existingClips = await getClipsByOriginId(payload.origin_id);
+    if (existingClips.length > 0) {
+      logger.info("upload", "Found existing clips for origin_id, cleaning up", {
+        origin_id: payload.origin_id,
+        existingClipCount: existingClips.length,
+      });
+
+      // Delete old files from OSS
+      const deletedKeys = await deleteObjectsByOriginId(payload.origin_id);
+      logger.debug("upload", "Deleted old OSS objects", {
+        origin_id: payload.origin_id,
+        deletedCount: deletedKeys.length,
+      });
+
+      // Delete old database records
+      const deletedCount = await deleteClipsByOriginId(payload.origin_id);
+      logger.info("upload", "Deleted old database records", {
+        origin_id: payload.origin_id,
+        deletedCount,
+      });
+    }
+  } catch (error) {
+    logger.error("upload", "Failed to cleanup old records", {
+      origin_id: payload.origin_id,
+      error,
+    });
+    await cleanupTempDir(workDir);
+    return c.json({ error: "Failed to cleanup old records" }, 500);
   }
 
   // Process all clips in parallel for better performance
