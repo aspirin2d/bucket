@@ -264,6 +264,9 @@
         font-size: 0.8125rem;
         color: #4b5563;
         line-height: 1.4;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .raw-json {
         margin-top: 0.75rem;
@@ -290,6 +293,58 @@
         font-family: ui-monospace, monospace;
         font-size: 0.75rem;
         line-height: 1.5;
+      }
+      .video-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+      }
+      .video-modal.active {
+        display: flex;
+      }
+      .video-modal-content {
+        position: relative;
+        max-width: 90%;
+        max-height: 90%;
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .video-modal video {
+        display: block;
+        max-width: 100%;
+        max-height: 90vh;
+        width: auto;
+        height: auto;
+      }
+      .video-modal-close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(255, 255, 255, 0.9);
+        border: none;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        font-size: 20px;
+        cursor: pointer;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #1a1a1a;
+        font-weight: bold;
+        transition: background 0.15s;
+      }
+      .video-modal-close:hover {
+        background: #fff;
       }
       @media (max-width: 768px) {
         .form-grid, .clip-grid {
@@ -361,6 +416,13 @@
       </div>
     </div>
 
+    <div id="video-modal" class="video-modal">
+      <div class="video-modal-content">
+        <button class="video-modal-close" id="close-video-modal" title="Close (Esc)">×</button>
+        <video id="modal-video" controls autoplay></video>
+      </div>
+    </div>
+
     <script>
       const form = document.getElementById("clip-form");
       const responseStatusEl = document.getElementById("response-status");
@@ -368,6 +430,32 @@
       const responseToggle = document.getElementById("response-toggle");
       const clipsContainer = document.getElementById("clips-container");
       const addClipButton = document.getElementById("add-clip");
+      const videoModal = document.getElementById("video-modal");
+      const modalVideo = document.getElementById("modal-video");
+      const closeVideoModalBtn = document.getElementById("close-video-modal");
+
+      const openVideoModal = (videoUrl) => {
+        modalVideo.src = videoUrl;
+        videoModal.classList.add("active");
+        document.body.style.overflow = "hidden";
+      };
+
+      const closeVideoModal = () => {
+        videoModal.classList.remove("active");
+        modalVideo.pause();
+        modalVideo.src = "";
+        document.body.style.overflow = "";
+      };
+
+      closeVideoModalBtn.addEventListener("click", closeVideoModal);
+      videoModal.addEventListener("click", (e) => {
+        if (e.target === videoModal) closeVideoModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && videoModal.classList.contains("active")) {
+          closeVideoModal();
+        }
+      });
 
       responseToggle.addEventListener("click", () => {
         responseBodyEl.classList.toggle("collapsed");
@@ -409,9 +497,21 @@
         if (typeof value === "string" && /^https?:\/\//i.test(value)) {
           const link = document.createElement("a");
           link.href = value;
-          link.target = "_blank";
           link.rel = "noreferrer";
           link.textContent = "→ link";
+
+          // Check if this is a video link
+          const isVideoLink = label === "Video" && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(value);
+          if (isVideoLink) {
+            link.style.cursor = "pointer";
+            link.addEventListener("click", (e) => {
+              e.preventDefault();
+              openVideoModal(value);
+            });
+          } else {
+            link.target = "_blank";
+          }
+
           valueEl.append(link);
         } else {
           valueEl.textContent = value ?? "—";
