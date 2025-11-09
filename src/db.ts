@@ -139,3 +139,30 @@ export const deleteClipsByOriginId = async (originId: string) => {
   ]);
   return res.rowCount ?? 0;
 };
+
+export const getAllClips = async (params: {
+  limit: number;
+  offset: number;
+}): Promise<{ clips: Clip[]; total: number }> => {
+  const { limit, offset } = params;
+
+  // Get total count
+  const countRes = await pool.query(`SELECT COUNT(*) FROM clip`);
+  const total = parseInt(countRes.rows[0].count, 10);
+
+  // Get paginated clips
+  const res = await pool.query(
+    `SELECT id, origin_id, start_frame, end_frame, description, video_url, animation_url, embedding, created_at, updated_at
+     FROM clip
+     ORDER BY created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset],
+  );
+
+  const clips = res.rows.map((row) => {
+    const embedding = parseVector(row.embedding as string);
+    return parseClipRow(row, embedding);
+  });
+
+  return { clips, total };
+};
