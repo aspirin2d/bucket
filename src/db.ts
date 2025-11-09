@@ -106,3 +106,25 @@ export const persistClips = async (clips: PersistableClip[]) => {
 };
 
 export type PersistClipsInput = PersistableClip[];
+
+export const getClipsByOriginId = async (
+  originId: string,
+): Promise<Clip[]> => {
+  const res = await pool.query(
+    `SELECT id, origin_id, start_frame, end_frame, description, video_url, animation_url, embedding, created_at, updated_at
+     FROM clip
+     WHERE origin_id = $1`,
+    [originId],
+  );
+
+  return res.rows.map((row) =>
+    parseClipRow(row, row.embedding as unknown as number[]),
+  );
+};
+
+export const deleteClipsByOriginId = async (originId: string) => {
+  const res = await pool.query(`DELETE FROM clip WHERE origin_id = $1`, [
+    originId,
+  ]);
+  return res.rowCount ?? 0;
+};
