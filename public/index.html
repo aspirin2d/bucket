@@ -567,6 +567,9 @@
         if (clip.created_at) {
           meta.append(createField("Created", formatTimestamp(clip.created_at)));
         }
+        if (clip.updated_at) {
+          meta.append(createField("Updated", formatTimestamp(clip.updated_at)));
+        }
         card.append(meta);
 
         const desc = document.createElement("p");
