@@ -9,7 +9,20 @@ const log = (
   meta?: Record<string, unknown>,
 ) => {
   const timestamp = new Date().toISOString();
-  const metaStr = meta ? ` ${JSON.stringify(meta)}` : "";
+
+  // Extract error stack if present
+  let metaToLog = meta;
+  if (meta?.error instanceof Error) {
+    metaToLog = {
+      ...meta,
+      error: {
+        message: meta.error.message,
+        stack: meta.error.stack,
+      },
+    };
+  }
+
+  const metaStr = metaToLog ? ` ${JSON.stringify(metaToLog)}` : "";
   const logMessage = `[${timestamp}] [${level.toUpperCase()}] [${context}] ${message}${metaStr}`;
 
   switch (level) {
