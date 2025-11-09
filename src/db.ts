@@ -42,7 +42,7 @@ type PersistableClip = {
   endFrame: number;
   description: string;
   videoUrl: string;
-  animUrl?: string | null;
+  animationUrl?: string | null;
   embedding: number[];
 };
 
@@ -86,7 +86,7 @@ export const persistClips = async (clips: PersistableClip[]) => {
           clip.endFrame,
           clip.description,
           clip.videoUrl,
-          clip.animUrl ?? null,
+          clip.animationUrl ?? null,
           vectorValue,
         ],
       );

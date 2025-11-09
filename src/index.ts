@@ -99,8 +99,15 @@ const processClip = async (params: {
   embedding: number[];
   animationBuffer?: Uint8Array | null;
 }): Promise<ProcessedClip> => {
-  const { clip, fps, originId, videoSourcePath, workDir, embedding, animationBuffer } =
-    params;
+  const {
+    clip,
+    fps,
+    originId,
+    videoSourcePath,
+    workDir,
+    embedding,
+    animationBuffer,
+  } = params;
   const assetId = randomUUID();
   const trimmedVideoPath = path.join(workDir, `${assetId}.mp4`);
 
@@ -231,7 +238,9 @@ app.post("/api/clips", async (c) => {
     payload.clips.map((clip) => clip.description),
   )
     .then((embeddings) => {
-      logger.debug("upload", "Generated embeddings", { count: embeddings.length });
+      logger.debug("upload", "Generated embeddings", {
+        count: embeddings.length,
+      });
       return embeddings;
     })
     .catch((error) => {
@@ -245,11 +254,15 @@ app.post("/api/clips", async (c) => {
     if (videoSourceInput.type === "file") {
       const result = await stageUploadedVideo(videoSourceInput.file);
       workspace = { workDir: result.tempDir, filePath: result.filePath };
-      logger.debug("upload", "Staged uploaded video", { workDir: workspace.workDir });
+      logger.debug("upload", "Staged uploaded video", {
+        workDir: workspace.workDir,
+      });
     } else {
       const result = await downloadOriginVideo(videoSourceInput.originUrl);
       workspace = { workDir: result.tempDir, filePath: result.filePath };
-      logger.debug("upload", "Downloaded video from origin", { originUrl: videoSourceInput.originUrl });
+      logger.debug("upload", "Downloaded video from origin", {
+        originUrl: videoSourceInput.originUrl,
+      });
     }
   } catch (error) {
     logger.error("upload", "Failed to acquire video source", { error });
@@ -281,7 +294,9 @@ app.post("/api/clips", async (c) => {
         workDir,
       );
       animationBuffer = await readFile(animationPath);
-      logger.debug("upload", "Downloaded animation from origin", { animationUrl: payload.anim_url });
+      logger.debug("upload", "Downloaded animation from origin", {
+        animationUrl: payload.anim_url,
+      });
     } catch (error) {
       logger.error("upload", "Failed to download animation file", { error });
       await cleanupTempDir(workDir);
@@ -301,7 +316,9 @@ app.post("/api/clips", async (c) => {
   // Process all clips in parallel for better performance
   let processedClips: ProcessedClip[] = [];
   try {
-    logger.debug("upload", "Processing clips in parallel", { count: payload.clips.length });
+    logger.debug("upload", "Processing clips in parallel", {
+      count: payload.clips.length,
+    });
     processedClips = await Promise.all(
       payload.clips.map(async (clip, index) => {
         const embedding = embeddings[index];
@@ -337,13 +354,16 @@ app.post("/api/clips", async (c) => {
         endFrame: clip.endFrame,
         description: clip.description,
         videoUrl: clip.videoUrl,
-        animUrl: clip.animationUrl,
+        animationUrl: clip.animationUrl,
         embedding: clip.embedding,
       })),
     );
-    logger.info("upload", "Persisted clips successfully", { count: persisted.length });
+    logger.info("upload", "Persisted clips successfully", {
+      count: persisted.length,
+    });
     return c.json({ clips: persisted });
   } catch (error) {
+    console.error(error);
     logger.error("upload", "Failed to process clips", { error });
     if (processedClips.length > 0) {
       await discardUploadedObjects(processedClips);
@@ -365,7 +385,10 @@ const bootstrap = async () => {
         port: config.port,
       },
       (info) => {
-        logger.info("app", `Server is running on http://localhost:${info.port}`);
+        logger.info(
+          "app",
+          `Server is running on http://localhost:${info.port}`,
+        );
       },
     );
   } catch (error) {

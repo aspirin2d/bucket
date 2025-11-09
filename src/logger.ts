@@ -2,7 +2,12 @@ const isDevEnv = process.env.NODE_ENV !== "production";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
-const log = (level: LogLevel, context: string, message: string, meta?: Record<string, unknown>) => {
+const log = (
+  level: LogLevel,
+  context: string,
+  message: string,
+  meta?: Record<string, unknown>,
+) => {
   const timestamp = new Date().toISOString();
   const metaStr = meta ? ` ${JSON.stringify(meta)}` : "";
   const logMessage = `[${timestamp}] [${level.toUpperCase()}] [${context}] ${message}${metaStr}`;
