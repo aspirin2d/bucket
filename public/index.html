@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clip Upload Harness</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 2rem auto;
+        max-width: 720px;
+        line-height: 1.5;
+      }
+      form {
+        border: 1px solid #ddd;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        background: #fafafa;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-top: 1rem;
+      }
+      input,
+      textarea,
+      button {
+        font: inherit;
+      }
+      input,
+      textarea {
+        width: 100%;
+        padding: 0.35rem 0.4rem;
+        border: 1px solid #ccc;
+        border-radius: 0.35rem;
+      }
+      textarea {
+        min-height: 80px;
+      }
+      fieldset {
+        border: 1px solid #ddd;
+        border-radius: 0.5rem;
+        padding: 1rem 1.25rem 1.25rem;
+        margin-top: 1.25rem;
+        background: #fff;
+      }
+      legend {
+        font-weight: 700;
+        padding: 0 0.35rem;
+      }
+      .muted {
+        color: #555;
+        font-size: 0.9rem;
+      }
+      .clip {
+        border: 1px solid #e5e5e5;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        background: #fdfdfd;
+      }
+      .clip-actions {
+        text-align: right;
+        margin-top: 0.5rem;
+      }
+      .clip-actions button {
+        background: #dc2626;
+      }
+      #add-clip {
+        background: #10b981;
+      }
+      button {
+        margin-top: 1.25rem;
+        padding: 0.5rem 1.5rem;
+        border-radius: 999px;
+        border: none;
+        color: #fff;
+        background: #2563eb;
+        cursor: pointer;
+      }
+      .row {
+        display: flex;
+        gap: 1rem;
+      }
+      .row > div {
+        flex: 1;
+      }
+      pre {
+        background: #0b1120;
+        color: #7ee787;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85rem;
+        line-height: 1.5;
+      }
+      .response-panel {
+        border: 1px solid #ddd;
+        border-radius: 0.5rem;
+        padding: 1rem 1.25rem 1.25rem;
+        margin-top: 2rem;
+        background: #fff;
+      }
+      .response-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.75rem;
+      }
+      .response-status {
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.15rem 0.75rem;
+        border-radius: 999px;
+        border: 1px solid transparent;
+      }
+      .response-status--idle {
+        background: #f5f5f5;
+        color: #555;
+        border-color: #e5e5e5;
+      }
+      .response-status--info {
+        background: #dbeafe;
+        color: #1d4ed8;
+        border-color: #93c5fd;
+      }
+      .response-status--success {
+        background: #d1fae5;
+        color: #047857;
+        border-color: #6ee7b7;
+      }
+      .response-status--error {
+        background: #fee2e2;
+        color: #b91c1c;
+        border-color: #fecaca;
+      }
+      .response-body {
+        margin-top: 0.75rem;
+        font-size: 0.95rem;
+      }
+      .response-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .response-summary {
+        margin: 0;
+        font-weight: 600;
+      }
+      .response-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+      .response-clip {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        background: #f9fafb;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .response-clip__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .response-clip__title {
+        margin: 0;
+        font-size: 1rem;
+      }
+      .response-pill {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.1rem 0.5rem;
+        border-radius: 999px;
+        background: #e0e7ff;
+        color: #3730a3;
+      }
+      .response-meta {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.85rem;
+      }
+      .response-field {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+      .response-label {
+        font-weight: 600;
+        color: #374151;
+      }
+      .response-value {
+        color: #111827;
+        text-align: right;
+      }
+      .response-value a {
+        color: #2563eb;
+        text-decoration: none;
+        word-break: break-all;
+      }
+      .response-description {
+        margin: 0;
+        font-size: 0.9rem;
+        color: #1f2937;
+      }
+      .response-raw summary {
+        cursor: pointer;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+      }
+      .response-empty {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        color: #4b5563;
+        background: #f3f4f6;
+        border-radius: 0.5rem;
+        padding: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Test /api/clips</h1>
+    <p>Upload a video and describe the clip bounds to exercise the API.</p>
+    <form id="clip-form">
+      <label>
+        Origin ID
+        <input type="text" name="origin_id" value="demo-video" required />
+      </label>
+      <label>
+        Frames Per Second
+        <input type="number" name="fps" min="1" max="240" value="30" required />
+      </label>
+      <fieldset>
+        <legend>Clips</legend>
+        <p class="muted">Add as many clips as you need, adjusting start/end frames and descriptions for each block.</p>
+        <div id="clips-container"></div>
+        <button type="button" id="add-clip">Add Another Clip</button>
+      </fieldset>
+      <label>
+        Video File
+        <input type="file" name="video" accept="video/*" />
+        <span class="muted">Optional if you provide a Video URL below.</span>
+      </label>
+      <label>
+        Video URL
+        <input type="url" name="video_url" placeholder="https://example.com/video.mp4" />
+        <span class="muted">If provided, the server downloads the video instead of using the file input.</span>
+      </label>
+      <button type="submit">Upload Clips</button>
+    </form>
+
+    <section class="response-panel">
+      <div class="response-header">
+        <h2>Response</h2>
+        <span id="response-status" class="response-status response-status--idle">Awaiting request</span>
+      </div>
+      <div id="response-body" class="response-body response-empty">(awaiting request)</div>
+    </section>
+
+    <script>
+      const form = document.getElementById("clip-form");
+      const responseStatusEl = document.getElementById("response-status");
+      const responseBodyEl = document.getElementById("response-body");
+      const clipsContainer = document.getElementById("clips-container");
+      const addClipButton = document.getElementById("add-clip");
+
+      const setResponse = ({ status, tone = "idle", body, bodyNode, emptyClass = false }) => {
+        responseStatusEl.textContent = status;
+        responseStatusEl.className = `response-status response-status--${tone}`;
+        responseBodyEl.innerHTML = "";
+        responseBodyEl.classList.toggle("response-empty", emptyClass);
+        if (bodyNode) {
+          responseBodyEl.append(bodyNode);
+        } else if (typeof body === "string") {
+          responseBodyEl.textContent = body;
+        } else if (body !== undefined) {
+          responseBodyEl.textContent = String(body);
+        }
+      };
+
+      setResponse({
+        status: "Awaiting request",
+        tone: "idle",
+        body: "(awaiting request)",
+        emptyClass: true,
+      });
+
+      const omitEmbeddings = (value) => {
+        if (Array.isArray(value)) {
+          return value.map(omitEmbeddings);
+        }
+        if (value && typeof value === "object") {
+          return Object.fromEntries(
+            Object.entries(value)
+              .filter(([key]) => key !== "embedding")
+              .map(([key, val]) => [key, omitEmbeddings(val)]),
+          );
+        }
+        return value;
+      };
+
+      const createField = (label, value) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "response-field";
+
+        const labelEl = document.createElement("span");
+        labelEl.className = "response-label";
+        labelEl.textContent = label;
+
+        const valueEl = document.createElement("span");
+        valueEl.className = "response-value";
+        if (typeof value === "string" && /^https?:\/\//i.test(value)) {
+          const link = document.createElement("a");
+          link.href = value;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          link.textContent = value;
+          valueEl.append(link);
+        } else if (value === undefined || value === null || value === "") {
+          valueEl.textContent = "—";
+        } else {
+          valueEl.textContent = value;
+        }
+
+        wrapper.append(labelEl, valueEl);
+        return wrapper;
+      };
+
+      const formatTimestamp = (value) => {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+          return value;
+        }
+        return date.toLocaleString();
+      };
+
+      const createRawJsonDetails = (data) => {
+        const details = document.createElement("details");
+        details.className = "response-raw";
+        const summary = document.createElement("summary");
+        summary.textContent = "View raw JSON";
+        const pre = document.createElement("pre");
+        pre.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+        details.append(summary, pre);
+        return details;
+      };
+
+      const createClipCard = (clip, index) => {
+        const card = document.createElement("article");
+        card.className = "response-clip";
+
+        const header = document.createElement("div");
+        header.className = "response-clip__header";
+        const title = document.createElement("h3");
+        title.className = "response-clip__title";
+        title.textContent = `Clip ${index + 1}`;
+        header.append(title);
+
+        if (clip.id !== undefined) {
+          const pill = document.createElement("span");
+          pill.className = "response-pill";
+          pill.textContent = `ID ${clip.id}`;
+          header.append(pill);
+        }
+
+        card.append(header);
+
+        const meta = document.createElement("div");
+        meta.className = "response-meta";
+        meta.append(
+          createField("Origin ID", clip.origin_id),
+          createField("Start Frame", clip.start_frame),
+          createField("End Frame", clip.end_frame),
+          createField("URL", clip.url),
+        );
+        if (clip.created_at) {
+          meta.append(createField("Created", formatTimestamp(clip.created_at)));
+        }
+        card.append(meta);
+
+        const description = document.createElement("p");
+        description.className = "response-description";
+        description.textContent = clip.description || "No description";
+        card.append(description);
+
+        return card;
+      };
+
+      const renderResponsePayload = (payload) => {
+        const sanitized = omitEmbeddings(payload);
+        const stack = document.createElement("div");
+        stack.className = "response-stack";
+
+        if (payload && typeof payload === "object" && "clips" in payload && Array.isArray(payload.clips)) {
+          const summary = document.createElement("p");
+          summary.className = "response-summary";
+          summary.textContent = `${payload.clips.length} clip${payload.clips.length === 1 ? "" : "s"} saved`;
+          stack.append(summary);
+
+          const grid = document.createElement("div");
+          grid.className = "response-grid";
+          payload.clips.forEach((clip, index) => {
+            grid.append(createClipCard(clip, index));
+          });
+          stack.append(grid);
+
+          stack.append(createRawJsonDetails(sanitized));
+          return stack;
+        }
+
+        if (payload && typeof payload === "object" && "error" in payload) {
+          const message = document.createElement("p");
+          message.className = "response-summary";
+          message.textContent = String(payload.error || "Request failed");
+          stack.append(message);
+          stack.append(createRawJsonDetails(sanitized));
+          return stack;
+        }
+
+        stack.append(createRawJsonDetails(sanitized));
+        return stack;
+      };
+
+      const createClipElement = (initial) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "clip";
+        wrapper.innerHTML = `
+          <div class="row">
+            <div>
+              <label>
+                Start Frame
+                <input type="number" data-field="start" min="0" value="${initial.start_frame}" required />
+              </label>
+            </div>
+            <div>
+              <label>
+                End Frame
+                <input type="number" data-field="end" min="1" value="${initial.end_frame}" required />
+              </label>
+            </div>
+          </div>
+          <label>
+            Description
+            <textarea data-field="description" required>${initial.description}</textarea>
+          </label>
+          <div class="clip-actions">
+            <button type="button" class="remove-clip">Remove</button>
+          </div>
+        `;
+        const removeButton = wrapper.querySelector(".remove-clip");
+        removeButton.addEventListener("click", () => {
+          wrapper.remove();
+          syncRemoveButtons();
+        });
+        return wrapper;
+      };
+
+      const syncRemoveButtons = () => {
+        const clipEls = clipsContainer.querySelectorAll(".clip");
+        clipEls.forEach((clipEl) => {
+          const button = clipEl.querySelector(".remove-clip");
+          button.disabled = clipEls.length === 1;
+        });
+      };
+
+      const addClip = (initial) => {
+        const defaults = (() => {
+          if (initial) return initial;
+          const lastClip = clipsContainer.lastElementChild;
+          if (!lastClip) {
+            return {
+              start_frame: 0,
+              end_frame: 90,
+              description: "Opening title card",
+            };
+          }
+          const lastEnd = Number(
+            lastClip.querySelector('[data-field="end"]').value || 0,
+          );
+          return {
+            start_frame: lastEnd,
+            end_frame: lastEnd + 60,
+            description: "New clip",
+          };
+        })();
+
+        const clipEl = createClipElement(defaults);
+        clipsContainer.appendChild(clipEl);
+        syncRemoveButtons();
+      };
+
+      addClipButton.addEventListener("click", () => addClip());
+      addClip();
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const submitButton = form.querySelector("button[type=submit]");
+        submitButton.disabled = true;
+        submitButton.textContent = "Uploading...";
+
+        try {
+          setResponse({ status: "Validating", tone: "info", body: "Checking form data before upload..." });
+          const formData = new FormData();
+          const videoFile = form.video.files[0];
+          const videoUrl = form.video_url.value.trim();
+          if (!videoFile && !videoUrl) {
+            throw new Error("Upload a video file or enter a Video URL");
+          }
+
+          const clipEls = clipsContainer.querySelectorAll(".clip");
+          if (clipEls.length === 0) {
+            throw new Error("Add at least one clip");
+          }
+
+          const clips = Array.from(clipEls).map((clipEl) => ({
+            start_frame: Number(clipEl.querySelector('[data-field="start"]').value),
+            end_frame: Number(clipEl.querySelector('[data-field="end"]').value),
+            description: clipEl
+              .querySelector('[data-field="description"]')
+              .value.trim(),
+          }));
+
+          const payload = {
+            origin_id: form.origin_id.value.trim(),
+            fps: Number(form.fps.value),
+            clips,
+          };
+
+          if (videoUrl) {
+            payload.origin_url = videoUrl;
+          }
+
+          formData.append("payload", JSON.stringify(payload));
+          if (videoFile) {
+            formData.append("video", videoFile);
+          }
+
+          setResponse({ status: "Uploading", tone: "info", body: "Sending request to /api/clips..." });
+
+          const res = await fetch("/api/clips", {
+            method: "POST",
+            body: formData,
+          });
+
+          const text = await res.text();
+          try {
+            const parsed = JSON.parse(text);
+            setResponse({
+              status: res.ok ? `Success (${res.status})` : `Error (${res.status})`,
+              tone: res.ok ? "success" : "error",
+              bodyNode: renderResponsePayload(parsed),
+            });
+          } catch (_) {
+            setResponse({
+              status: res.ok ? `Success (${res.status})` : `Error (${res.status})`,
+              tone: res.ok ? "success" : "error",
+              body: text,
+            });
+          }
+        } catch (error) {
+          setResponse({
+            status: "Request Error",
+            tone: "error",
+            body: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = "Upload Clips";
+        }
+      });
+    </script>
+  </body>
+</html>

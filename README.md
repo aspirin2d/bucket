@@ -1,0 +1,54 @@
+```
+npm install
+npm run dev
+```
+
+```
+open http://localhost:3000
+```
+
+Visiting `/` now serves the harness defined in `public/index.html`, making it
+easy to test uploads without reaching for `curl`.
+
+### Browser Harness Tips
+
+- The form supports any number of clips—use **Add Another Clip** to append
+  ranges and remove blocks you no longer need. Each block enforces numeric
+  validation before submission.
+- The payload preview under **Response** shows the raw JSON returned by the
+  API so you can quickly verify the stored URLs.
+- Upload a local file *or* paste a Video URL; the harness automatically sets
+  `origin_url` when no file is present. Swap the default FPS/origin ID fields
+  to match your source material before POSTing to `/api/clips`.
+
+## POST /api/clips example
+
+Use `multipart/form-data` to upload the source video directly. Send the clip
+metadata as JSON in a `payload` field and attach the file with the `video`
+field. Frame numbers still describe the start/end of the clip ranges.
+
+```
+curl -X POST http://localhost:3000/api/clips \
+  -F 'payload={
+    "origin_id": "demo-video",
+    "fps": 30,
+    "clips": [
+      {
+        "start_frame": 0,
+        "end_frame": 90,
+        "description": "Opening title card"
+      },
+      {
+        "start_frame": 300,
+        "end_frame": 450,
+        "description": "Product hero moment"
+      }
+    ]
+  };type=application/json' \
+  -F 'video=@/absolute/path/to/source.mp4;type=video/mp4'
+```
+
+If you still prefer to host the file elsewhere, you can skip the `video` field
+and POST JSON with an `origin_url` (same shape as before). The server responds
+with `{ "clips": [...] }` where each entry contains the persisted metadata and
+storage URL.
