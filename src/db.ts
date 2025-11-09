@@ -16,7 +16,6 @@ export const pool = new Pool({
 
 export const ensureClipTable = async () => {
   await pool.query(`CREATE EXTENSION IF NOT EXISTS vector`);
-  // await pool.query(`DROP TABLE clip`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS clip (
       id SERIAL PRIMARY KEY,
@@ -71,7 +70,6 @@ export const persistClips = async (clips: PersistableClip[]) => {
   }
 
   const client = await pool.connect();
-  console.log("start insert");
   try {
     await client.query("BEGIN");
 

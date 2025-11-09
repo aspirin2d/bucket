@@ -52,8 +52,6 @@ export const embedDescriptions = async (descriptions: string[]) => {
     throw new Error("Embedding response length mismatch");
   }
 
-  console.log(embeddings[0].embedding.length);
-
   return embeddings.map(({ embedding }) => {
     if (!embedding || embedding.length !== config.embedding.dimensions) {
       throw new Error("Invalid embedding response");

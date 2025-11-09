@@ -22,6 +22,11 @@ const configSchema = z.object({
   }),
   video: z.object({
     defaultFps: z.coerce.number().int().positive().default(30),
+    maxDownloadSizeMB: z.coerce.number().int().positive().default(500),
+    downloadTimeoutMs: z.coerce.number().int().positive().default(120000),
+  }),
+  upload: z.object({
+    timeoutMs: z.coerce.number().int().positive().default(120000),
   }),
 });
 
@@ -45,6 +50,11 @@ export const config = configSchema.parse({
   },
   video: {
     defaultFps: process.env.DEFAULT_FPS,
+    maxDownloadSizeMB: process.env.MAX_DOWNLOAD_SIZE_MB,
+    downloadTimeoutMs: process.env.DOWNLOAD_TIMEOUT_MS,
+  },
+  upload: {
+    timeoutMs: process.env.UPLOAD_TIMEOUT_MS,
   },
 });
 

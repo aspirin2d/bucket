@@ -1,12 +1,14 @@
 import "dotenv/config";
 import OSS from "ali-oss";
 
+import { config } from "./config.js";
+
 export const store = new OSS({
   accessKeyId: process.env.ACCESS_KEY_ID!,
   accessKeySecret: process.env.ACCESS_KEY_SECRET!,
   bucket: process.env.OSS_BUCKET!,
   region: process.env.OSS_REGION!,
-  timeout: 120000,
+  timeout: config.upload.timeoutMs,
 });
 
 export const uploadObject = async (objectKey: string, localPath: string) => {
