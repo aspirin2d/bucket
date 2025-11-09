@@ -402,6 +402,10 @@ app.post("/api/clips", async (c) => {
     logger.info("upload", "Persisted clips successfully", {
       count: persisted.length,
     });
+    logger.info("upload", "Upload finished successfully", {
+      origin_id: payload.origin_id,
+      clipCount: persisted.length,
+    });
     return c.json({ clips: persisted });
   } catch (error) {
     console.error(error);
