@@ -25,12 +25,64 @@ export const downloadOriginVideo = async (originUrl: string) => {
   return { tempDir, filePath };
 };
 
-export const stageUploadedVideo = async (file: File) => {
-  const tempDir = await mkdtemp(path.join(tmpdir(), config.tmpDirPrefix));
-  const fileName = file.name || "origin.mp4";
+export const downloadAnimationBinary = async (
+  originUrl: string,
+  tempDir: string,
+) => {
+  const response = await fetch(originUrl);
+  if (!response.ok || !response.body) {
+    throw new Error(
+      `Failed to download origin animation: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const fileName = path.basename(new URL(originUrl).pathname) || "origin.bin";
   const filePath = path.join(tempDir, fileName);
+  const webStream = response.body as NodeReadableStream<Uint8Array>;
+  await pipeline(Readable.fromWeb(webStream), createWriteStream(filePath));
+  return filePath;
+};
+
+const writeUploadedAsset = async (params: {
+  file: File;
+  tempDir: string;
+  fallbackName: string;
+}) => {
+  const { file, tempDir, fallbackName } = params;
+  const fileName = file.name?.trim() ? path.basename(file.name) : fallbackName;
+  const safeName = fileName || fallbackName;
+  const filePath = path.join(tempDir, safeName);
   const webStream = file.stream() as NodeReadableStream<Uint8Array>;
   await pipeline(Readable.fromWeb(webStream), createWriteStream(filePath));
+  return filePath;
+};
+
+export const stageUploadedVideo = async (
+  file: File,
+  options?: { tempDir?: string },
+) => {
+  const tempDir =
+    options?.tempDir ??
+    (await mkdtemp(path.join(tmpdir(), config.tmpDirPrefix)));
+  const filePath = await writeUploadedAsset({
+    file,
+    tempDir,
+    fallbackName: "origin.mp4",
+  });
+  return { tempDir, filePath };
+};
+
+export const stageUploadedBinary = async (params: {
+  file: File;
+  tempDir: string;
+  fallbackName?: string;
+}) => {
+  const { file, tempDir, fallbackName = "origin.bin" } = params;
+  const filePath = await writeUploadedAsset({
+    file,
+    tempDir,
+    fallbackName,
+  });
   return { tempDir, filePath };
 };
 
@@ -57,7 +109,7 @@ export const trimClip = async (params: {
       outputPath,
     ];
 
-    const ffmpeg = spawn("ffmpeg", args, { stdio: "inherit" });
+    const ffmpeg = spawn("ffmpeg", args);
     ffmpeg.on("error", (error) => reject(error));
     ffmpeg.on("close", (code) => {
       if (code === 0) {

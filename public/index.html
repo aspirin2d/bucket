@@ -6,7 +6,12 @@
     <title>Clip Upload Harness</title>
     <style>
       body {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
         margin: 2rem auto;
         max-width: 720px;
         line-height: 1.5;
@@ -91,7 +96,9 @@
         padding: 1rem;
         border-radius: 0.5rem;
         overflow-x: auto;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
         font-size: 0.85rem;
         line-height: 1.5;
       }
@@ -218,7 +225,9 @@
         margin-bottom: 0.35rem;
       }
       .response-empty {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
         color: #4b5563;
         background: #f3f4f6;
         border-radius: 0.5rem;
@@ -240,7 +249,10 @@
       </label>
       <fieldset>
         <legend>Clips</legend>
-        <p class="muted">Add as many clips as you need, adjusting start/end frames and descriptions for each block.</p>
+        <p class="muted">
+          Add as many clips as you need, adjusting start/end frames and
+          descriptions for each block.
+        </p>
         <div id="clips-container"></div>
         <button type="button" id="add-clip">Add Another Clip</button>
       </fieldset>
@@ -250,9 +262,40 @@
         <span class="muted">Optional if you provide a Video URL below.</span>
       </label>
       <label>
+        Animation File (.bin)
+        <input
+          type="file"
+          name="animation"
+          accept=".bin,application/octet-stream"
+        />
+        <span class="muted"
+          >Optional binary animation; trimmed alongside each clip when
+          provided.</span
+        >
+      </label>
+      <label>
+        Animation URL
+        <input
+          type="url"
+          name="animation_url"
+          placeholder="https://example.com/source.bin"
+        />
+        <span class="muted"
+          >If set, the server downloads the animation when no file is
+          uploaded.</span
+        >
+      </label>
+      <label>
         Video URL
-        <input type="url" name="video_url" placeholder="https://example.com/video.mp4" />
-        <span class="muted">If provided, the server downloads the video instead of using the file input.</span>
+        <input
+          type="url"
+          name="video_url"
+          placeholder="https://example.com/video.mp4"
+        />
+        <span class="muted"
+          >If provided, the server downloads the video instead of using the file
+          input.</span
+        >
       </label>
       <button type="submit">Upload Clips</button>
     </form>
@@ -260,9 +303,13 @@
     <section class="response-panel">
       <div class="response-header">
         <h2>Response</h2>
-        <span id="response-status" class="response-status response-status--idle">Awaiting request</span>
+        <span id="response-status" class="response-status response-status--idle"
+          >Awaiting request</span
+        >
       </div>
-      <div id="response-body" class="response-body response-empty">(awaiting request)</div>
+      <div id="response-body" class="response-body response-empty">
+        (awaiting request)
+      </div>
     </section>
 
     <script>
@@ -272,7 +319,13 @@
       const clipsContainer = document.getElementById("clips-container");
       const addClipButton = document.getElementById("add-clip");
 
-      const setResponse = ({ status, tone = "idle", body, bodyNode, emptyClass = false }) => {
+      const setResponse = ({
+        status,
+        tone = "idle",
+        body,
+        bodyNode,
+        emptyClass = false,
+      }) => {
         responseStatusEl.textContent = status;
         responseStatusEl.className = `response-status response-status--${tone}`;
         responseBodyEl.innerHTML = "";
@@ -348,7 +401,8 @@
         const summary = document.createElement("summary");
         summary.textContent = "View raw JSON";
         const pre = document.createElement("pre");
-        pre.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+        pre.textContent =
+          typeof data === "string" ? data : JSON.stringify(data, null, 2);
         details.append(summary, pre);
         return details;
       };
@@ -379,7 +433,8 @@
           createField("Origin ID", clip.origin_id),
           createField("Start Frame", clip.start_frame),
           createField("End Frame", clip.end_frame),
-          createField("URL", clip.url),
+          createField("Video URL", clip.video_url ?? clip.url ?? null),
+          createField("Animation URL", clip.animation_url),
         );
         if (clip.created_at) {
           meta.append(createField("Created", formatTimestamp(clip.created_at)));
@@ -399,7 +454,12 @@
         const stack = document.createElement("div");
         stack.className = "response-stack";
 
-        if (payload && typeof payload === "object" && "clips" in payload && Array.isArray(payload.clips)) {
+        if (
+          payload &&
+          typeof payload === "object" &&
+          "clips" in payload &&
+          Array.isArray(payload.clips)
+        ) {
           const summary = document.createElement("p");
           summary.className = "response-summary";
           summary.textContent = `${payload.clips.length} clip${payload.clips.length === 1 ? "" : "s"} saved`;
@@ -507,10 +567,16 @@
         submitButton.textContent = "Uploading...";
 
         try {
-          setResponse({ status: "Validating", tone: "info", body: "Checking form data before upload..." });
+          setResponse({
+            status: "Validating",
+            tone: "info",
+            body: "Checking form data before upload...",
+          });
           const formData = new FormData();
           const videoFile = form.video.files[0];
+          const animationFile = form.animation.files[0];
           const videoUrl = form.video_url.value.trim();
+          const animationUrl = form.animation_url.value.trim();
           if (!videoFile && !videoUrl) {
             throw new Error("Upload a video file or enter a Video URL");
           }
@@ -521,7 +587,9 @@
           }
 
           const clips = Array.from(clipEls).map((clipEl) => ({
-            start_frame: Number(clipEl.querySelector('[data-field="start"]').value),
+            start_frame: Number(
+              clipEl.querySelector('[data-field="start"]').value,
+            ),
             end_frame: Number(clipEl.querySelector('[data-field="end"]').value),
             description: clipEl
               .querySelector('[data-field="description"]')
@@ -537,13 +605,23 @@
           if (videoUrl) {
             payload.origin_url = videoUrl;
           }
+          if (animationUrl) {
+            payload.anim_url = animationUrl;
+          }
 
           formData.append("payload", JSON.stringify(payload));
           if (videoFile) {
             formData.append("video", videoFile);
           }
+          if (animationFile) {
+            formData.append("animation", animationFile);
+          }
 
-          setResponse({ status: "Uploading", tone: "info", body: "Sending request to /api/clips..." });
+          setResponse({
+            status: "Uploading",
+            tone: "info",
+            body: "Sending request to /api/clips...",
+          });
 
           const res = await fetch("/api/clips", {
             method: "POST",
@@ -554,13 +632,17 @@
           try {
             const parsed = JSON.parse(text);
             setResponse({
-              status: res.ok ? `Success (${res.status})` : `Error (${res.status})`,
+              status: res.ok
+                ? `Success (${res.status})`
+                : `Error (${res.status})`,
               tone: res.ok ? "success" : "error",
               bodyNode: renderResponsePayload(parsed),
             });
           } catch (_) {
             setResponse({
-              status: res.ok ? `Success (${res.status})` : `Error (${res.status})`,
+              status: res.ok
+                ? `Success (${res.status})`
+                : `Error (${res.status})`,
               tone: res.ok ? "success" : "error",
               body: text,
             });

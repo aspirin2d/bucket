@@ -20,6 +20,11 @@ easy to test uploads without reaching for `curl`.
 - Upload a local file *or* paste a Video URL; the harness automatically sets
   `origin_url` when no file is present. Swap the default FPS/origin ID fields
   to match your source material before POSTing to `/api/clips`.
+- Attach an optional **Animation File (.bin)** to send a companion rig/pose
+  binary. When present, each clip stores a trimmed `animation_url` that shares
+  the same asset ID as the clip video for easy correlation.
+- Prefer the **Animation URL** field when the `.bin` already lives elsewhere;
+  the backend downloads it automatically whenever no animation file is sent.
 
 ## POST /api/clips example
 
@@ -45,10 +50,14 @@ curl -X POST http://localhost:3000/api/clips \
       }
     ]
   };type=application/json' \
-  -F 'video=@/absolute/path/to/source.mp4;type=video/mp4'
+-F 'video=@/absolute/path/to/source.mp4;type=video/mp4'
+-F 'animation=@/absolute/path/to/source.bin;type=application/octet-stream'
 ```
 
-If you still prefer to host the file elsewhere, you can skip the `video` field
-and POST JSON with an `origin_url` (same shape as before). The server responds
-with `{ "clips": [...] }` where each entry contains the persisted metadata and
-storage URL.
+If the animation lives behind a URL instead, skip the `animation` form field
+and include `"anim_url": "https://example.com/source.bin"` inside the JSON
+payload. The server responds with `{ "clips": [...] }` where each entry contains
+the persisted metadata, the clip `url`, and (when applicable) an
+`animation_url` referencing the trimmed binary.
+When hosting both assets remotely, provide both `origin_url` and `anim_url`
+inside the payload to let the ingest workflow download and trim them on demand.
