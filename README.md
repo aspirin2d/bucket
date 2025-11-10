@@ -48,13 +48,19 @@ easy to test uploads without reaching for `curl`.
 - Prefer the **Animation URL** field when the `.bin` already lives elsewhere;
   the backend downloads it automatically whenever no animation file is sent.
 
-## POST /api/clips example
+## API Reference
 
-Use `multipart/form-data` to upload the source video directly. Send the clip
-metadata as JSON in a `payload` field and attach the file with the `video`
-field. Frame numbers still describe the start/end of the clip ranges.
+### POST /api/clips
 
-```
+Upload and process video clips with optional animation data. This endpoint accepts either multipart form data (for file uploads) or JSON (for URL-based processing).
+
+#### Request Formats
+
+**Option 1: Multipart Form Upload**
+
+Use `multipart/form-data` to upload files directly:
+
+```bash
 curl -X POST http://localhost:3000/api/clips \
   -F 'payload={
     "origin_id": "demo-video",
@@ -72,14 +78,160 @@ curl -X POST http://localhost:3000/api/clips \
       }
     ]
   };type=application/json' \
--F 'video=@/absolute/path/to/source.mp4;type=video/mp4'
--F 'animation=@/absolute/path/to/source.bin;type=application/octet-stream'
+  -F 'video=@/absolute/path/to/source.mp4;type=video/mp4' \
+  -F 'animation=@/absolute/path/to/source.bin;type=application/octet-stream'
 ```
 
-If the animation lives behind a URL instead, skip the `animation` form field
-and include `"anim_url": "https://example.com/source.bin"` inside the JSON
-payload. The server responds with `{ "clips": [...] }` where each entry contains
-the persisted metadata, the clip `url`, and (when applicable) an
-`animation_url` referencing the trimmed binary.
-When hosting both assets remotely, provide both `origin_url` and `anim_url`
-inside the payload to let the ingest workflow download and trim them on demand.
+**Option 2: JSON with Remote URLs**
+
+Use `application/json` to process videos from URLs:
+
+```bash
+curl -X POST http://localhost:3000/api/clips \
+  -H "Content-Type: application/json" \
+  -d '{
+    "origin_id": "demo-video",
+    "origin_url": "https://example.com/source.mp4",
+    "anim_url": "https://example.com/source.bin",
+    "fps": 30,
+    "clips": [
+      {
+        "start_frame": 0,
+        "end_frame": 90,
+        "description": "Opening title card"
+      }
+    ]
+  }'
+```
+
+#### Request Parameters
+
+##### Form Fields (Multipart)
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `payload` | JSON string | Yes | Clip metadata (see Payload Schema below) |
+| `video` | File | Yes* | Video file to process (required when not using `origin_url`) |
+| `animation` | File | No | Optional animation binary file (.bin) |
+
+##### Payload Schema
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `origin_id` | string | Yes | - | Unique identifier for the source video. Re-uploading with the same `origin_id` will **replace all existing clips** for that ID |
+| `fps` | integer | No | 30 | Frame rate of the source video (1-240) |
+| `clips` | array | Yes | - | Array of clip definitions (1-100 clips per request) |
+| `origin_url` | URL | No | - | Remote video URL (required when not uploading a file) |
+| `anim_url` | URL | No | - | Remote animation URL (alternative to uploading animation file) |
+
+##### Clip Object
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `start_frame` | integer | Yes | ≥ 0 | Starting frame number (inclusive) |
+| `end_frame` | integer | Yes | > `start_frame` | Ending frame number (exclusive) |
+| `description` | string | Yes | 1-1024 chars | Text description used for semantic search and embeddings |
+
+#### Response
+
+**Success (200 OK)**
+
+```json
+{
+  "clips": [
+    {
+      "id": 42,
+      "origin_id": "demo-video",
+      "start_frame": 0,
+      "end_frame": 90,
+      "description": "Opening title card",
+      "video_url": "https://bucket.oss-region.aliyuncs.com/clips/demo-video/uuid.mp4",
+      "animation_url": "https://bucket.oss-region.aliyuncs.com/animations/demo-video/uuid.bin",
+      "embedding": [0.123, -0.456, ...],
+      "created_at": "2025-11-10T12:34:56.789Z",
+      "updated_at": "2025-11-10T12:34:56.789Z"
+    }
+  ]
+}
+```
+
+**Error Responses**
+
+| Status | Description |
+|--------|-------------|
+| 400 | Invalid request format, missing required fields, or validation errors |
+| 500 | Server error during clip processing or database operations |
+| 502 | Failed to download or process source video/animation |
+
+#### Processing Behavior
+
+1. **Automatic Embeddings**: Descriptions are automatically converted to vector embeddings for semantic search
+2. **Parallel Processing**: Multiple clips from the same source are processed concurrently
+3. **Animation Trimming**: Animation binaries are automatically sliced to match clip frame ranges
+4. **Origin ID Replacement**: Uploading clips with an existing `origin_id` deletes all previous clips and files for that ID
+5. **Atomic Rollback**: If any clip fails to process, all uploaded files are automatically cleaned up
+
+#### Examples
+
+**Minimal Example (No Animation)**
+
+```bash
+curl -X POST http://localhost:3000/api/clips \
+  -F 'payload={"origin_id":"simple-001","fps":24,"clips":[{"start_frame":0,"end_frame":120,"description":"Intro scene"}]};type=application/json' \
+  -F 'video=@video.mp4'
+```
+
+**Using Remote URLs**
+
+```bash
+curl -X POST http://localhost:3000/api/clips \
+  -H "Content-Type: application/json" \
+  -d '{
+    "origin_id": "remote-video",
+    "origin_url": "https://example.com/video.mp4",
+    "anim_url": "https://example.com/animation.bin",
+    "fps": 60,
+    "clips": [{"start_frame": 0, "end_frame": 1800, "description": "Full clip"}]
+  }'
+```
+
+**Mixed Animation Sources**
+
+You can upload a video file while referencing a remote animation:
+
+```bash
+curl -X POST http://localhost:3000/api/clips \
+  -F 'payload={"origin_id":"mixed","anim_url":"https://example.com/anim.bin","fps":30,"clips":[{"start_frame":0,"end_frame":60,"description":"Opening"}]};type=application/json' \
+  -F 'video=@local-video.mp4'
+```
+
+### GET /api/clips
+
+Retrieve all uploaded clips with pagination.
+
+#### Query Parameters
+
+| Parameter | Type | Default | Max | Description |
+|-----------|------|---------|-----|-------------|
+| `limit` | integer | 10 | 100 | Number of clips to return |
+| `offset` | integer | 0 | - | Number of clips to skip |
+
+#### Response
+
+```json
+{
+  "clips": [ /* array of clip objects */ ],
+  "pagination": {
+    "total": 156,
+    "limit": 10,
+    "offset": 0,
+    "hasMore": true
+  }
+}
+```
+
+#### Example
+
+```bash
+curl "http://localhost:3000/api/clips?limit=20&offset=40"
+```
