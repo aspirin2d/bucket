@@ -1,22 +1,12 @@
 import { Pool } from "pg";
 
 import { config } from "./config.js";
-import { clipSchema, type Clip } from "./schemas.js";
+import { type Clip } from "./schemas.js";
 
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { eq, count, desc, sql } from "drizzle-orm";
 import * as schema from "./db/schema.js";
-
-const vectorLiteral = (values: number[]) => `[${values.join(",")}]`;
-const parseVector = (vectorString: string): number[] => {
-  // PostgreSQL vector type returns as "[1,2,3]" string format
-  // Remove brackets and split by comma, then parse each value as float
-  const cleaned = vectorString.trim().replace(/^\[|\]$/g, "");
-  if (!cleaned) {
-    return [];
-  }
-  return cleaned.split(",").map((v) => parseFloat(v.trim()));
-};
 
 export const pool = new Pool({
   user: config.db.user,
@@ -27,28 +17,30 @@ export const pool = new Pool({
   ssl: config.db.ssl,
 });
 
-const db = drizzle({ client: pool, schema });
+export const db = drizzle({ client: pool, schema });
+
+// Helper function to convert Drizzle's camelCase result to snake_case Clip type
+const mapToClip = (dbClip: typeof schema.clip.$inferSelect): Clip => {
+  return {
+    id: dbClip.id,
+    origin_id: dbClip.originId,
+    start_frame: dbClip.startFrame,
+    end_frame: dbClip.endFrame,
+    description: dbClip.description,
+    embedding: dbClip.embedding as number[],
+    video_url: dbClip.videoUrl,
+    animation_url: dbClip.animationUrl ?? undefined,
+    created_at: dbClip.createdAt,
+    updated_at: dbClip.updatedAt,
+  };
+};
 
 export const ensureClipTable = async () => {
+  // Ensure vector extension is available
   await pool.query(`CREATE EXTENSION IF NOT EXISTS vector`);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS clip (
-      id SERIAL PRIMARY KEY,
-      origin_id TEXT NOT NULL,
 
-      start_frame INTEGER NOT NULL,
-      end_frame INTEGER NOT NULL,
-
-      video_url TEXT NOT NULL,
-      animation_url TEXT,
-
-      description TEXT NOT NULL,
-      embedding vector(${config.embedding.dimensions}) NOT NULL,
-
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  // Note: Table creation is handled by Drizzle migrations
+  // The schema is defined in src/db/schema.ts
 };
 
 type PersistableClip = {
@@ -61,86 +53,52 @@ type PersistableClip = {
   embedding: number[];
 };
 
-const parseClipRow = (
-  row: Record<string, unknown>,
-  embedding: number[],
-): Clip => {
-  return clipSchema.parse({
-    id: row.id,
-    origin_id: row.origin_id,
-    start_frame: row.start_frame,
-    end_frame: row.end_frame,
-    description: row.description,
-    video_url: row.video_url,
-    animation_url: row.animation_url ?? null,
-    embedding,
-    created_at: new Date(row.created_at as string | number | Date),
-    updated_at: new Date(row.updated_at as string | number | Date),
-  });
-};
-
-export const persistClips = async (clips: PersistableClip[]) => {
+export const persistClips = async (clips: PersistableClip[]): Promise<Clip[]> => {
   if (clips.length === 0) {
     return [];
   }
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
+  return await db.transaction(async (tx) => {
     const inserted: Clip[] = [];
-    for (const clip of clips) {
-      const vectorValue = vectorLiteral(clip.embedding);
-      const res = await client.query(
-        `INSERT INTO clip (origin_id, start_frame, end_frame, description, video_url, animation_url, embedding)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::vector)
-         RETURNING id, origin_id, start_frame, end_frame, description, video_url, animation_url, created_at, updated_at`,
-        [
-          clip.originId,
-          clip.startFrame,
-          clip.endFrame,
-          clip.description,
-          clip.videoUrl,
-          clip.animationUrl ?? null,
-          vectorValue,
-        ],
-      );
 
-      const [row] = res.rows;
-      inserted.push(parseClipRow(row, clip.embedding));
+    for (const clip of clips) {
+      const [result] = await tx
+        .insert(schema.clip)
+        .values({
+          originId: clip.originId,
+          startFrame: clip.startFrame,
+          endFrame: clip.endFrame,
+          description: clip.description,
+          videoUrl: clip.videoUrl,
+          animationUrl: clip.animationUrl ?? null,
+          embedding: clip.embedding, // Drizzle handles vector serialization
+        })
+        .returning();
+
+      inserted.push(mapToClip(result));
     }
 
-    await client.query("COMMIT");
     return inserted;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 };
 
 export type PersistClipsInput = PersistableClip[];
 
 export const getClipsByOriginId = async (originId: string): Promise<Clip[]> => {
-  const res = await pool.query(
-    `SELECT id, origin_id, start_frame, end_frame, description, video_url, animation_url, embedding, created_at, updated_at
-     FROM clip
-     WHERE origin_id = $1`,
-    [originId],
-  );
+  const clips = await db
+    .select()
+    .from(schema.clip)
+    .where(eq(schema.clip.originId, originId));
 
-  return res.rows.map((row) => {
-    const embedding = parseVector(row.embedding as string);
-    return parseClipRow(row, embedding);
-  });
+  return clips.map(mapToClip);
 };
 
-export const deleteClipsByOriginId = async (originId: string) => {
-  const res = await pool.query(`DELETE FROM clip WHERE origin_id = $1`, [
-    originId,
-  ]);
-  return res.rowCount ?? 0;
+export const deleteClipsByOriginId = async (originId: string): Promise<number> => {
+  const result = await db
+    .delete(schema.clip)
+    .where(eq(schema.clip.originId, originId));
+
+  return result.rowCount ?? 0;
 };
 
 export const getAllClips = async (params: {
@@ -150,22 +108,19 @@ export const getAllClips = async (params: {
   const { limit, offset } = params;
 
   // Get total count
-  const countRes = await pool.query(`SELECT COUNT(*) FROM clip`);
-  const total = parseInt(countRes.rows[0].count, 10);
+  const [countResult] = await db
+    .select({ count: count() })
+    .from(schema.clip);
+
+  const total = Number(countResult.count);
 
   // Get paginated clips
-  const res = await pool.query(
-    `SELECT id, origin_id, start_frame, end_frame, description, video_url, animation_url, embedding, created_at, updated_at
-     FROM clip
-     ORDER BY created_at DESC
-     LIMIT $1 OFFSET $2`,
-    [limit, offset],
-  );
+  const dbClips = await db
+    .select()
+    .from(schema.clip)
+    .orderBy(desc(schema.clip.createdAt))
+    .limit(limit)
+    .offset(offset);
 
-  const clips = res.rows.map((row) => {
-    const embedding = parseVector(row.embedding as string);
-    return parseClipRow(row, embedding);
-  });
-
-  return { clips, total };
+  return { clips: dbClips.map(mapToClip), total };
 };
