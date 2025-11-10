@@ -3,8 +3,11 @@ import { Pool } from "pg";
 import { config } from "./config.js";
 import { clipSchema, type Clip } from "./schemas.js";
 
-const vectorLiteral = (values: number[]) => `[${values.join(",")}]`;
+import "dotenv/config";
+import { drizzle } from "drizzle-orm/node-postgres";
+import * as schema from "./db/schema.js";
 
+const vectorLiteral = (values: number[]) => `[${values.join(",")}]`;
 const parseVector = (vectorString: string): number[] => {
   // PostgreSQL vector type returns as "[1,2,3]" string format
   // Remove brackets and split by comma, then parse each value as float
@@ -23,6 +26,8 @@ export const pool = new Pool({
   database: config.db.database,
   ssl: config.db.ssl,
 });
+
+const db = drizzle({ client: pool, schema });
 
 export const ensureClipTable = async () => {
   await pool.query(`CREATE EXTENSION IF NOT EXISTS vector`);
@@ -117,9 +122,7 @@ export const persistClips = async (clips: PersistableClip[]) => {
 
 export type PersistClipsInput = PersistableClip[];
 
-export const getClipsByOriginId = async (
-  originId: string,
-): Promise<Clip[]> => {
+export const getClipsByOriginId = async (originId: string): Promise<Clip[]> => {
   const res = await pool.query(
     `SELECT id, origin_id, start_frame, end_frame, description, video_url, animation_url, embedding, created_at, updated_at
      FROM clip
