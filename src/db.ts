@@ -152,6 +152,11 @@ export const getAllClips = async (params: {
 
 // Helper to parse PostgreSQL vector format to number array
 const parseVector = (vectorString: string): number[] => {
+  // Handle null, undefined, or non-string values
+  if (!vectorString || typeof vectorString !== "string") {
+    return [];
+  }
+
   // PostgreSQL vector type returns as "[1,2,3]" string format
   // Remove brackets and split by comma, then parse each value as float
   const cleaned = vectorString.trim().replace(/^\[|\]$/g, "");
