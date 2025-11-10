@@ -4,8 +4,8 @@ import { config } from "./config.js";
 import { type Clip } from "./schemas.js";
 
 import "dotenv/config";
+import { count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, count, desc, sql } from "drizzle-orm";
 import * as schema from "./db/schema.js";
 
 export const pool = new Pool({
@@ -53,7 +53,9 @@ type PersistableClip = {
   embedding: number[];
 };
 
-export const persistClips = async (clips: PersistableClip[]): Promise<Clip[]> => {
+export const persistClips = async (
+  clips: PersistableClip[],
+): Promise<Clip[]> => {
   if (clips.length === 0) {
     return [];
   }
@@ -93,7 +95,9 @@ export const getClipsByOriginId = async (originId: string): Promise<Clip[]> => {
   return clips.map(mapToClip);
 };
 
-export const deleteClipsByOriginId = async (originId: string): Promise<number> => {
+export const deleteClipsByOriginId = async (
+  originId: string,
+): Promise<number> => {
   const result = await db
     .delete(schema.clip)
     .where(eq(schema.clip.originId, originId));
@@ -108,9 +112,7 @@ export const getAllClips = async (params: {
   const { limit, offset } = params;
 
   // Get total count
-  const [countResult] = await db
-    .select({ count: count() })
-    .from(schema.clip);
+  const [countResult] = await db.select({ count: count() }).from(schema.clip);
 
   const total = Number(countResult.count);
 
