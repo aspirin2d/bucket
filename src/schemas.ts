@@ -31,7 +31,6 @@ export const clipInputSchema = z
 
 export const uploadPayloadSchema = z.object({
   origin_id: z.string().min(1),
-  origin_url: z.url().optional(),
   video_url: z.url().optional(),
   anim_url: z.url().optional(),
 

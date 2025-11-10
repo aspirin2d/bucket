@@ -40,7 +40,7 @@ easy to test uploads without reaching for `curl`.
 - The payload preview under **Response** shows the raw JSON returned by the
   API so you can quickly verify the stored URLs.
 - Upload a local file *or* paste a Video URL; the harness automatically sets
-  `origin_url` when no file is present. Swap the default FPS/origin ID fields
+  `video_url` when no file is present. Swap the default FPS/origin ID fields
   to match your source material before POSTing to `/api/clips`.
 - Attach an optional **Animation File (.bin)** to send a companion rig/pose
   binary. When present, each clip stores a trimmed `animation_url` that shares
@@ -91,7 +91,7 @@ curl -X POST http://localhost:3000/api/clips \
   -H "Content-Type: application/json" \
   -d '{
     "origin_id": "demo-video",
-    "origin_url": "https://example.com/source.mp4",
+    "video_url": "https://example.com/source.mp4",
     "anim_url": "https://example.com/source.bin",
     "fps": 30,
     "clips": [
@@ -111,7 +111,7 @@ curl -X POST http://localhost:3000/api/clips \
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `payload` | JSON string | Yes | Clip metadata (see Payload Schema below) |
-| `video` | File | Yes* | Video file to process (required when not using `origin_url`) |
+| `video` | File | Yes* | Video file to process (required when not using `video_url`) |
 | `animation` | File | No | Optional animation binary file (.bin) |
 
 ##### Payload Schema
@@ -121,7 +121,7 @@ curl -X POST http://localhost:3000/api/clips \
 | `origin_id` | string | Yes | - | Unique identifier for the source video. Re-uploading with the same `origin_id` will **replace all existing clips** for that ID |
 | `fps` | integer | No | 30 | Frame rate of the source video (1-240) |
 | `clips` | array | Yes | - | Array of clip definitions (1-100 clips per request) |
-| `origin_url` | URL | No | - | Remote video URL (required when not uploading a file) |
+| `video_url` | URL | No | - | Remote video URL (required when not uploading a file) |
 | `anim_url` | URL | No | - | Remote animation URL (alternative to uploading animation file) |
 
 ##### Clip Object
@@ -188,7 +188,7 @@ curl -X POST http://localhost:3000/api/clips \
   -H "Content-Type: application/json" \
   -d '{
     "origin_id": "remote-video",
-    "origin_url": "https://example.com/video.mp4",
+    "video_url": "https://example.com/video.mp4",
     "anim_url": "https://example.com/animation.bin",
     "fps": 60,
     "clips": [{"start_frame": 0, "end_frame": 1800, "description": "Full clip"}]
