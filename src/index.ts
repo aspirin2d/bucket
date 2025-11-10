@@ -14,6 +14,7 @@ import {
   getAllClips,
   getClipsByOriginId,
   persistClips,
+  searchClipsBySimilarity,
 } from "./db.js";
 import {
   generateIndexPage,
@@ -260,6 +261,61 @@ app.get("/api/clips", async (c) => {
   } catch (error) {
     logger.error("clips", "Failed to fetch clips", { error });
     return c.json({ error: "Failed to fetch clips" }, 500);
+  }
+});
+
+app.get("/api/clips/search", async (c) => {
+  try {
+    const query = c.req.query("query");
+    if (!query) {
+      return c.json({ error: "Query parameter is required" }, 400);
+    }
+
+    const limit = Math.min(
+      parseInt(c.req.query("limit") ?? "10", 10),
+      100,
+    );
+    const threshold = c.req.query("threshold")
+      ? parseFloat(c.req.query("threshold") ?? "0")
+      : undefined;
+
+    // Validate threshold if provided
+    if (threshold !== undefined && (threshold < 0 || threshold > 1)) {
+      return c.json({ error: "Threshold must be between 0 and 1" }, 400);
+    }
+
+    logger.debug("search", "Searching clips by similarity", {
+      query,
+      limit,
+      threshold,
+    });
+
+    // Generate embedding for the query text
+    const [queryEmbedding] = await embedDescriptions([query]);
+    if (!queryEmbedding) {
+      throw new Error("Failed to generate query embedding");
+    }
+
+    // Search for similar clips
+    const results = await searchClipsBySimilarity({
+      queryEmbedding,
+      limit,
+      threshold,
+    });
+
+    logger.info("search", "Search completed", {
+      query,
+      resultsCount: results.length,
+    });
+
+    return c.json({
+      query,
+      results,
+      count: results.length,
+    });
+  } catch (error) {
+    logger.error("search", "Failed to search clips", { error });
+    return c.json({ error: "Failed to search clips" }, 500);
   }
 });
 
