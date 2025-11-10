@@ -133,23 +133,69 @@ export const trimClip = async (params: {
   outputPath: string;
   startSeconds: number;
   endSeconds: number;
+  /**
+   * If true, re-encodes the video using GPU acceleration (when enabled in config).
+   * If false (default), uses stream copy for fast, lossless trimming.
+   */
+  transcode?: boolean;
 }) => {
-  const { inputPath, outputPath, startSeconds, endSeconds } = params;
+  const { inputPath, outputPath, startSeconds, endSeconds, transcode = false } = params;
   return new Promise<void>((resolve, reject) => {
-    const args = [
-      "-y",
-      "-ss",
-      startSeconds.toFixed(3),
-      "-to",
-      endSeconds.toFixed(3),
-      "-i",
-      inputPath,
-      "-c",
-      "copy",
-      "-avoid_negative_ts",
-      "1",
-      outputPath,
-    ];
+    const args = ["-y"];
+
+    // Add GPU acceleration flags if enabled and transcoding
+    const useGpu = config.ffmpeg.gpuAcceleration && transcode;
+    if (useGpu) {
+      args.push(
+        "-vsync", "0",                    // Prevent duplicate frames during decode
+        "-hwaccel", "cuda",               // Enable NVIDIA GPU hardware acceleration
+        "-hwaccel_output_format", "cuda", // Keep frames in GPU memory
+      );
+    }
+
+    // Add seek and input parameters
+    args.push(
+      "-ss", startSeconds.toFixed(3),
+      "-to", endSeconds.toFixed(3),
+      "-i", inputPath,
+    );
+
+    // Configure codec and encoding options
+    if (transcode && useGpu) {
+      // GPU-accelerated encoding
+      args.push(
+        "-c:v", config.ffmpeg.gpuEncoder,       // Use NVIDIA encoder (h264_nvenc, hevc_nvenc, av1_nvenc)
+        "-preset", config.ffmpeg.gpuPreset,     // Encoding preset (p1-p7)
+        "-b:v", config.ffmpeg.gpuBitrate,       // Target bitrate
+        "-c:a", "copy",                         // Copy audio without re-encoding
+      );
+
+      // Add adaptive quantization for better quality
+      if (config.ffmpeg.gpuSpatialAQ) {
+        args.push("-spatial-aq", "1");
+      }
+      if (config.ffmpeg.gpuTemporalAQ) {
+        args.push("-temporal-aq", "1");
+      }
+
+      // Add rate control lookahead
+      if (config.ffmpeg.gpuRcLookahead > 0) {
+        args.push("-rc-lookahead", config.ffmpeg.gpuRcLookahead.toString());
+      }
+    } else if (transcode) {
+      // CPU-based encoding (fallback when GPU is disabled)
+      args.push(
+        "-c:v", "libx264",   // Use software H.264 encoder
+        "-preset", "medium", // Balanced preset
+        "-crf", "23",        // Constant rate factor (quality)
+        "-c:a", "copy",      // Copy audio without re-encoding
+      );
+    } else {
+      // Stream copy (default) - fast, lossless, no re-encoding
+      args.push("-c", "copy");
+    }
+
+    args.push("-avoid_negative_ts", "1", outputPath);
 
     const ffmpeg = spawn("ffmpeg", args);
     const stderrChunks: Buffer[] = [];

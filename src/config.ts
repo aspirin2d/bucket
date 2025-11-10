@@ -28,6 +28,15 @@ const configSchema = z.object({
   upload: z.object({
     timeoutMs: z.coerce.number().int().positive().default(120000),
   }),
+  ffmpeg: z.object({
+    gpuAcceleration: z.coerce.boolean().default(false),
+    gpuEncoder: z.enum(["h264_nvenc", "hevc_nvenc", "av1_nvenc"]).default("h264_nvenc"),
+    gpuPreset: z.enum(["p1", "p2", "p3", "p4", "p5", "p6", "p7"]).default("p4"),
+    gpuBitrate: z.string().default("5M"),
+    gpuSpatialAQ: z.coerce.boolean().default(true),
+    gpuTemporalAQ: z.coerce.boolean().default(true),
+    gpuRcLookahead: z.coerce.number().int().min(0).max(32).default(20),
+  }),
 });
 
 export const config = configSchema.parse({
@@ -55,6 +64,15 @@ export const config = configSchema.parse({
   },
   upload: {
     timeoutMs: process.env.UPLOAD_TIMEOUT_MS,
+  },
+  ffmpeg: {
+    gpuAcceleration: process.env.FFMPEG_GPU_ACCELERATION,
+    gpuEncoder: process.env.FFMPEG_GPU_ENCODER,
+    gpuPreset: process.env.FFMPEG_GPU_PRESET,
+    gpuBitrate: process.env.FFMPEG_GPU_BITRATE,
+    gpuSpatialAQ: process.env.FFMPEG_GPU_SPATIAL_AQ,
+    gpuTemporalAQ: process.env.FFMPEG_GPU_TEMPORAL_AQ,
+    gpuRcLookahead: process.env.FFMPEG_GPU_RC_LOOKAHEAD,
   },
 });
 

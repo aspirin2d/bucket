@@ -1,10 +1,32 @@
-```
+## Setup
+
+```bash
 npm install
+
+# Copy environment template and configure
+cp .env.example .env
+# Edit .env with your database credentials and API keys
+
 npm run dev
 ```
 
 ```
 open http://localhost:3000
+```
+
+## GPU Acceleration
+
+This application supports NVIDIA GPU acceleration for video encoding operations. See [NVIDIA GPU Acceleration Documentation](docs/NVIDIA_GPU_ACCELERATION.md) for:
+- Prerequisites and installation
+- Configuration options
+- Performance optimization
+- Troubleshooting
+
+Quick setup:
+```bash
+# Enable GPU acceleration in .env
+FFMPEG_GPU_ACCELERATION=true
+FFMPEG_GPU_ENCODER=h264_nvenc
 ```
 
 Visiting `/` now serves the harness defined in `public/index.html`, making it
