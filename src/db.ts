@@ -1,11 +1,20 @@
-import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, desc, sql } from "drizzle-orm";
 
 import { config } from "./config.js";
-import { clip, type Clip, type NewClip } from "./db/schema.js";
+import { clipSchema, type Clip } from "./schemas.js";
 
-// Create PostgreSQL connection pool
+const vectorLiteral = (values: number[]) => `[${values.join(",")}]`;
+
+const parseVector = (vectorString: string): number[] => {
+  // PostgreSQL vector type returns as "[1,2,3]" string format
+  // Remove brackets and split by comma, then parse each value as float
+  const cleaned = vectorString.trim().replace(/^\[|\]$/g, "");
+  if (!cleaned) {
+    return [];
+  }
+  return cleaned.split(",").map((v) => parseFloat(v.trim()));
+};
+
 export const pool = new Pool({
   user: config.db.user,
   password: config.db.password,
@@ -15,15 +24,8 @@ export const pool = new Pool({
   ssl: config.db.ssl,
 });
 
-// Initialize Drizzle ORM with the pool
-export const db = drizzle(pool);
-
-// Ensure pgvector extension and clip table are created
 export const ensureClipTable = async () => {
-  // Enable pgvector extension
   await pool.query(`CREATE EXTENSION IF NOT EXISTS vector`);
-
-  // Create table with Drizzle schema
   await pool.query(`
     CREATE TABLE IF NOT EXISTS clip (
       id SERIAL PRIMARY KEY,
@@ -54,72 +56,90 @@ type PersistableClip = {
   embedding: number[];
 };
 
-// Helper to convert number array to PostgreSQL vector literal
-const vectorLiteral = (values: number[]) => `[${values.join(",")}]`;
+const parseClipRow = (
+  row: Record<string, unknown>,
+  embedding: number[],
+): Clip => {
+  return clipSchema.parse({
+    id: row.id,
+    origin_id: row.origin_id,
+    start_frame: row.start_frame,
+    end_frame: row.end_frame,
+    description: row.description,
+    video_url: row.video_url,
+    animation_url: row.animation_url ?? null,
+    embedding,
+    created_at: new Date(row.created_at as string | number | Date),
+    updated_at: new Date(row.updated_at as string | number | Date),
+  });
+};
 
-// Persist clips to database using Drizzle
-export const persistClips = async (clips: PersistableClip[]): Promise<Clip[]> => {
+export const persistClips = async (clips: PersistableClip[]) => {
   if (clips.length === 0) {
     return [];
   }
 
-  // Use transaction for atomicity
-  return await db.transaction(async (tx) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
     const inserted: Clip[] = [];
+    for (const clip of clips) {
+      const vectorValue = vectorLiteral(clip.embedding);
+      const res = await client.query(
+        `INSERT INTO clip (origin_id, start_frame, end_frame, description, video_url, animation_url, embedding)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::vector)
+         RETURNING id, origin_id, start_frame, end_frame, description, video_url, animation_url, created_at, updated_at`,
+        [
+          clip.originId,
+          clip.startFrame,
+          clip.endFrame,
+          clip.description,
+          clip.videoUrl,
+          clip.animationUrl ?? null,
+          vectorValue,
+        ],
+      );
 
-    for (const clipData of clips) {
-      // Insert clip and return the inserted row
-      const [insertedClip] = await tx
-        .insert(clip)
-        .values({
-          originId: clipData.originId,
-          startFrame: clipData.startFrame,
-          endFrame: clipData.endFrame,
-          description: clipData.description,
-          videoUrl: clipData.videoUrl,
-          animationUrl: clipData.animationUrl ?? null,
-          // Use SQL fragment to cast the vector literal
-          embedding: sql`${vectorLiteral(clipData.embedding)}::vector`,
-        })
-        .returning();
-
-      // Add the embedding array back to the returned clip
-      inserted.push({
-        ...insertedClip,
-        embedding: clipData.embedding,
-      });
+      const [row] = res.rows;
+      inserted.push(parseClipRow(row, clip.embedding));
     }
 
+    await client.query("COMMIT");
     return inserted;
-  });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export type PersistClipsInput = PersistableClip[];
 
-// Get clips by origin ID
-export const getClipsByOriginId = async (originId: string): Promise<Clip[]> => {
-  const clips = await db
-    .select()
-    .from(clip)
-    .where(eq(clip.originId, originId));
+export const getClipsByOriginId = async (
+  originId: string,
+): Promise<Clip[]> => {
+  const res = await pool.query(
+    `SELECT id, origin_id, start_frame, end_frame, description, video_url, animation_url, embedding, created_at, updated_at
+     FROM clip
+     WHERE origin_id = $1`,
+    [originId],
+  );
 
-  // Parse embedding vectors from PostgreSQL format
-  return clips.map((c) => ({
-    ...c,
-    embedding: parseVector(c.embedding as unknown as string),
-  }));
+  return res.rows.map((row) => {
+    const embedding = parseVector(row.embedding as string);
+    return parseClipRow(row, embedding);
+  });
 };
 
-// Delete clips by origin ID
-export const deleteClipsByOriginId = async (originId: string): Promise<number> => {
-  const result = await db
-    .delete(clip)
-    .where(eq(clip.originId, originId));
-
-  return result.rowCount ?? 0;
+export const deleteClipsByOriginId = async (originId: string) => {
+  const res = await pool.query(`DELETE FROM clip WHERE origin_id = $1`, [
+    originId,
+  ]);
+  return res.rowCount ?? 0;
 };
 
-// Get all clips with pagination
 export const getAllClips = async (params: {
   limit: number;
   offset: number;
@@ -127,36 +147,22 @@ export const getAllClips = async (params: {
   const { limit, offset } = params;
 
   // Get total count
-  const [countResult] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(clip);
-  const total = countResult.count;
+  const countRes = await pool.query(`SELECT COUNT(*) FROM clip`);
+  const total = parseInt(countRes.rows[0].count, 10);
 
   // Get paginated clips
-  const clips = await db
-    .select()
-    .from(clip)
-    .orderBy(desc(clip.createdAt))
-    .limit(limit)
-    .offset(offset);
+  const res = await pool.query(
+    `SELECT id, origin_id, start_frame, end_frame, description, video_url, animation_url, embedding, created_at, updated_at
+     FROM clip
+     ORDER BY created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset],
+  );
 
-  // Parse embedding vectors from PostgreSQL format
-  return {
-    clips: clips.map((c) => ({
-      ...c,
-      embedding: parseVector(c.embedding as unknown as string),
-    })),
-    total,
-  };
-};
+  const clips = res.rows.map((row) => {
+    const embedding = parseVector(row.embedding as string);
+    return parseClipRow(row, embedding);
+  });
 
-// Helper to parse PostgreSQL vector format to number array
-const parseVector = (vectorString: string): number[] => {
-  // PostgreSQL vector type returns as "[1,2,3]" string format
-  // Remove brackets and split by comma, then parse each value as float
-  const cleaned = vectorString.trim().replace(/^\[|\]$/g, "");
-  if (!cleaned) {
-    return [];
-  }
-  return cleaned.split(",").map((v) => parseFloat(v.trim()));
+  return { clips, total };
 };

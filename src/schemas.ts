@@ -2,8 +2,21 @@ import z from "zod";
 
 import { config } from "./config.js";
 
-// Export Clip type from Drizzle schema
-export type { Clip } from "./db/schema.js";
+export const clipSchema = z.object({
+  id: z.int(),
+  origin_id: z.string(),
+  start_frame: z.int(),
+  end_frame: z.int(),
+
+  description: z.string(),
+  embedding: z.array(z.number()).length(config.embedding.dimensions),
+
+  video_url: z.url(),
+  animation_url: z.url().optional(),
+
+  created_at: z.date(),
+  updated_at: z.date(),
+});
 
 export const clipInputSchema = z
   .object({
@@ -27,3 +40,4 @@ export const uploadPayloadSchema = z.object({
 });
 
 export type UploadPayload = z.infer<typeof uploadPayloadSchema>;
+export type Clip = z.infer<typeof clipSchema>;
