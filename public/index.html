@@ -226,6 +226,7 @@
         border: 1px solid #e5e7eb;
         border-radius: 6px;
         padding: 0.75rem;
+        position: relative;
       }
       .clip-card-header {
         display: flex;
@@ -281,9 +282,55 @@
         font-size: 0.8125rem;
         color: #4b5563;
         line-height: 1.4;
+        position: relative;
+      }
+      .clip-desc-text {
+        display: block;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+      .clip-desc::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        left: 0;
+        bottom: calc(100% + 0.5rem);
+        background: rgba(17, 24, 39, 0.96);
+        color: #f9fafb;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25);
+        font-size: 0.75rem;
+        line-height: 1.4;
+        white-space: normal;
+        min-width: 220px;
+        max-width: 320px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(4px);
+        transition: opacity 120ms ease, transform 120ms ease;
+        z-index: 10;
+      }
+      .clip-desc::before {
+        content: "";
+        position: absolute;
+        left: 12px;
+        bottom: calc(100% + 0.25rem);
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 6px solid rgba(17, 24, 39, 0.96);
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 120ms ease, transform 120ms ease;
+        pointer-events: none;
+        z-index: 10;
+      }
+      .clip-card:hover .clip-desc::after,
+      .clip-card:hover .clip-desc::before {
+        opacity: 1;
+        transform: translateY(0);
       }
       .raw-json {
         margin-top: 0.75rem;
@@ -382,6 +429,10 @@
         font-size: 0.875rem;
         color: #6b7280;
       }
+      .database-section .response-body {
+        max-height: none;
+        overflow: visible;
+      }
       .pagination {
         display: flex;
         justify-content: center;
@@ -425,6 +476,9 @@
       .empty-state-text {
         font-size: 0.875rem;
       }
+      .upload-section {
+        margin-top: 2rem;
+      }
       .search-section {
         margin-top: 2rem;
       }
@@ -448,6 +502,10 @@
         grid-template-columns: 1fr 1fr 1fr;
         gap: 0.5rem;
         margin-bottom: 0.75rem;
+      }
+      .search-section .response-body {
+        max-height: none;
+        overflow: visible;
       }
       .similarity-score {
         display: inline-block;
@@ -486,94 +544,6 @@
   </head>
   <body>
     <div class="container">
-      <h1>Clip Upload</h1>
-      <p class="subtitle">
-        Upload videos and define clip ranges for processing
-      </p>
-
-      <form id="clip-form">
-        <div class="form-grid">
-          <div>
-            <label>Origin ID</label>
-            <input type="text" name="origin_id" value="demo-video" required />
-          </div>
-          <div>
-            <label>FPS</label>
-            <input
-              type="number"
-              name="fps"
-              min="1"
-              max="240"
-              value="30"
-              required
-            />
-          </div>
-        </div>
-
-        <div class="section-title">Clips</div>
-        <div id="clips-container"></div>
-        <button type="button" id="add-clip" class="btn-success">
-          + Add Clip
-        </button>
-
-        <div class="section-title">Video Source</div>
-        <div class="form-grid--full">
-          <div>
-            <label>Video File</label>
-            <input type="file" name="video" accept="video/*" />
-            <span class="hint">Or provide a URL below</span>
-          </div>
-          <div>
-            <label>Video URL</label>
-            <input
-              type="url"
-              name="video_url"
-              placeholder="https://example.com/video.mp4"
-            />
-          </div>
-        </div>
-
-        <div class="section-title">Animation (Optional)</div>
-        <div class="form-grid">
-          <div>
-            <label>Animation File (.bin)</label>
-            <input
-              type="file"
-              name="animation"
-              accept=".bin,application/octet-stream"
-            />
-          </div>
-          <div>
-            <label>Animation URL</label>
-            <input
-              type="url"
-              name="animation_url"
-              placeholder="https://example.com/anim.bin"
-            />
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          class="btn-primary"
-          style="width: 100%; margin-top: 1rem"
-        >
-          Upload Clips
-        </button>
-      </form>
-
-      <div class="response-panel">
-        <div class="response-header" id="response-toggle">
-          <h2 class="response-title">Response</h2>
-          <span id="response-status" class="response-badge badge-idle"
-            >Awaiting</span
-          >
-        </div>
-        <div id="response-body" class="response-body">
-          <div class="response-empty">(awaiting request)</div>
-        </div>
-      </div>
-
       <div class="search-section">
         <div class="database-header">
           <h2 class="database-title">Search Similar Clips</h2>
@@ -599,7 +569,7 @@
                 name="limit"
                 min="1"
                 max="100"
-                value="10"
+                value="8"
               />
               <span class="hint">Max: 100</span>
             </div>
@@ -660,6 +630,96 @@
             </button>
             <span id="pagination-info" class="pagination-info">Page 1</span>
             <button id="next-page" class="btn-secondary">Next</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="upload-section">
+        <h1>Clip Upload</h1>
+        <p class="subtitle">
+          Upload videos and define clip ranges for processing
+        </p>
+
+        <form id="clip-form">
+          <div class="form-grid">
+            <div>
+              <label>Origin ID</label>
+              <input type="text" name="origin_id" value="demo-video" required />
+            </div>
+            <div>
+              <label>FPS</label>
+              <input
+                type="number"
+                name="fps"
+                min="1"
+                max="240"
+                value="30"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="section-title">Clips</div>
+          <div id="clips-container"></div>
+          <button type="button" id="add-clip" class="btn-success">
+            + Add Clip
+          </button>
+
+          <div class="section-title">Video Source</div>
+          <div class="form-grid--full">
+            <div>
+              <label>Video File</label>
+              <input type="file" name="video" accept="video/*" />
+              <span class="hint">Or provide a URL below</span>
+            </div>
+            <div>
+              <label>Video URL</label>
+              <input
+                type="url"
+                name="video_url"
+                placeholder="https://example.com/video.mp4"
+              />
+            </div>
+          </div>
+
+          <div class="section-title">Animation (Optional)</div>
+          <div class="form-grid">
+            <div>
+              <label>Animation File (.bin)</label>
+              <input
+                type="file"
+                name="animation"
+                accept=".bin,application/octet-stream"
+              />
+            </div>
+            <div>
+              <label>Animation URL</label>
+              <input
+                type="url"
+                name="animation_url"
+                placeholder="https://example.com/anim.bin"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            class="btn-primary"
+            style="width: 100%; margin-top: 1rem"
+          >
+            Upload Clips
+          </button>
+        </form>
+
+        <div class="response-panel">
+          <div class="response-header" id="response-toggle">
+            <h2 class="response-title">Response</h2>
+            <span id="response-status" class="response-badge badge-idle"
+              >Awaiting</span
+            >
+          </div>
+          <div id="response-body" class="response-body">
+            <div class="response-empty">(awaiting request)</div>
           </div>
         </div>
       </div>
@@ -852,7 +912,12 @@
 
         const desc = document.createElement("p");
         desc.className = "clip-desc";
-        desc.textContent = clip.description || "No description";
+        const descriptionText = clip.description || "No description";
+        desc.dataset.tooltip = descriptionText;
+        const descText = document.createElement("span");
+        descText.className = "clip-desc-text";
+        descText.textContent = descriptionText;
+        desc.append(descText);
         card.append(desc);
 
         return card;
@@ -1135,7 +1200,7 @@
 
       // Pagination state
       let currentPage = 1;
-      const itemsPerPage = 10;
+      const itemsPerPage = 12;
       const databaseClipsEl = document.getElementById("database-clips");
       const databaseCountEl = document.getElementById("database-count");
       const paginationEl = document.getElementById("pagination");
@@ -1164,7 +1229,7 @@
             databaseClipsEl.innerHTML = `
               <div class="empty-state">
                 <div class="empty-state-icon">📹</div>
-                <div class="empty-state-text">No clips uploaded yet. Upload some clips above to get started!</div>
+                <div class="empty-state-text">No clips uploaded yet. Upload some clips below to get started!</div>
               </div>
             `;
             paginationEl.style.display = "none";
