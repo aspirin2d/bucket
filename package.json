@@ -8,10 +8,12 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",
+    "@types/marked": "^5.0.2",
     "ali-oss": "^6.23.0",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.44.7",
     "hono": "^4.10.4",
+    "marked": "^17.0.0",
     "pg": "^8.16.3",
     "zod": "^4.1.12"
   },

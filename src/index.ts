@@ -15,6 +15,12 @@ import {
   getClipsByOriginId,
   persistClips,
 } from "./db.js";
+import {
+  generateIndexPage,
+  generateDocsPage,
+  renderMarkdown,
+  listDocs,
+} from "./docs.js";
 import { embedDescriptions } from "./embeddings.js";
 import { logger } from "./logger.js";
 import { uploadPayloadSchema, type UploadPayload } from "./schemas.js";
@@ -190,6 +196,45 @@ app.get("/", async (c) => {
   } catch (error) {
     logger.error("harness", "Failed to read public/index.html", { error });
     return c.text("Upload harness unavailable", 500);
+  }
+});
+
+// Documentation routes
+app.get("/docs", async (c) => {
+  try {
+    const html = generateIndexPage();
+    return c.html(html);
+  } catch (error) {
+    logger.error("docs", "Failed to generate docs index", { error });
+    return c.text("Documentation unavailable", 500);
+  }
+});
+
+app.get("/docs/:docName", async (c) => {
+  try {
+    const docName = c.req.param("docName");
+    const content = await renderMarkdown(docName);
+
+    if (!content) {
+      return c.html(
+        generateDocsPage(
+          "Not Found",
+          `<h1>404 - Documentation Not Found</h1>
+           <p>The requested documentation "${docName}" does not exist.</p>
+           <p><a href="/docs">Return to documentation index</a></p>`
+        ),
+        404
+      );
+    }
+
+    const docs = listDocs();
+    const doc = docs.find((d) => d.name === docName);
+    const title = doc?.displayName || docName;
+
+    return c.html(generateDocsPage(title, content, docName));
+  } catch (error) {
+    logger.error("docs", "Failed to render documentation", { error, docName: c.req.param("docName") });
+    return c.text("Failed to load documentation", 500);
   }
 });
 
