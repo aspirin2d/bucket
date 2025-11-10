@@ -780,7 +780,7 @@
             fps: Number(form.fps.value),
             clips,
           };
-          if (videoUrl) payload.origin_url = videoUrl;
+          if (videoUrl) payload.video_url = videoUrl;
           if (animationUrl) payload.anim_url = animationUrl;
 
           formData.append("payload", JSON.stringify(payload));

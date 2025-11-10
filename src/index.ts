@@ -298,10 +298,10 @@ app.post("/api/clips", async (c) => {
       return c.json({ error: "Invalid request" }, 400);
     }
 
-    const originUrl = payload.origin_url ?? payload.video_url;
+    const originUrl = payload.video_url;
     if (!originUrl) {
       return c.json(
-        { error: "origin_url is required when no video file is uploaded" },
+        { error: "video_url is required when no video file is uploaded" },
         400,
       );
     }
