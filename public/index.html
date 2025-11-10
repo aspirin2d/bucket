@@ -216,7 +216,9 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 0.5rem;
         margin-bottom: 0.5rem;
+        flex-wrap: wrap;
       }
       .clip-card-title {
         margin: 0;
@@ -408,11 +410,50 @@
       .empty-state-text {
         font-size: 0.875rem;
       }
+      .search-section {
+        margin-top: 2rem;
+      }
+      .search-form {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+      }
+      .search-input-group {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      .search-input-group input[type="text"] {
+        flex: 1;
+      }
+      .search-options {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      .similarity-score {
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .similarity-high { background: #d1fae5; color: #065f46; }
+      .similarity-medium { background: #fef3c7; color: #92400e; }
+      .similarity-low { background: #fee2e2; color: #991b1b; }
       @media (max-width: 768px) {
         .form-grid, .clip-grid {
           grid-template-columns: 1fr;
         }
         .response-grid {
+          grid-template-columns: 1fr;
+        }
+        .search-options {
           grid-template-columns: 1fr;
         }
       }
@@ -474,6 +515,45 @@
         </div>
         <div id="response-body" class="response-body">
           <div class="response-empty">(awaiting request)</div>
+        </div>
+      </div>
+
+      <div class="search-section">
+        <div class="database-header">
+          <h2 class="database-title">Search Similar Clips</h2>
+          <span class="database-count">Semantic search using embeddings</span>
+        </div>
+        <form id="search-form" class="search-form">
+          <div class="search-input-group">
+            <input
+              type="text"
+              id="search-query"
+              name="query"
+              placeholder="Search for clips by description (e.g., 'running animation', 'character walking')..."
+              required
+            />
+            <button type="submit" class="btn-primary">Search</button>
+          </div>
+          <div class="search-options">
+            <div>
+              <label>Results Limit</label>
+              <input type="number" id="search-limit" name="limit" min="1" max="100" value="10" />
+              <span class="hint">Max: 100</span>
+            </div>
+            <div>
+              <label>Similarity Threshold</label>
+              <input type="number" id="search-threshold" name="threshold" min="0" max="1" step="0.01" placeholder="Optional (0-1)" />
+              <span class="hint">0.0 - 1.0 (optional)</span>
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+              <button type="button" id="clear-search" class="btn-secondary" style="width: 100%;">Clear Results</button>
+            </div>
+          </div>
+        </form>
+        <div class="response-panel">
+          <div id="search-results" class="response-body">
+            <div class="response-empty">Enter a search query above to find similar clips</div>
+          </div>
         </div>
       </div>
 
@@ -615,7 +695,7 @@
         return details;
       };
 
-      const createClipCard = (clip, index) => {
+      const createClipCard = (clip, index, showSimilarity = false) => {
         const card = document.createElement("article");
         card.className = "clip-card";
 
@@ -631,6 +711,21 @@
           id.className = "clip-id";
           id.textContent = `#${clip.id}`;
           header.append(id);
+        }
+
+        if (showSimilarity && clip.similarity_score !== undefined) {
+          const score = clip.similarity_score;
+          const scoreEl = document.createElement("span");
+          scoreEl.className = "similarity-score";
+          if (score >= 0.8) {
+            scoreEl.classList.add("similarity-high");
+          } else if (score >= 0.6) {
+            scoreEl.classList.add("similarity-medium");
+          } else {
+            scoreEl.classList.add("similarity-low");
+          }
+          scoreEl.textContent = `${(score * 100).toFixed(1)}%`;
+          header.append(scoreEl);
         }
 
         card.append(header);
@@ -820,6 +915,82 @@
           submitButton.disabled = false;
           submitButton.textContent = "Upload Clips";
         }
+      });
+
+      // Search functionality
+      const searchForm = document.getElementById("search-form");
+      const searchResultsEl = document.getElementById("search-results");
+      const clearSearchBtn = document.getElementById("clear-search");
+
+      searchForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const submitButton = searchForm.querySelector("button[type=submit]");
+        submitButton.disabled = true;
+        submitButton.textContent = "Searching...";
+
+        try {
+          const query = document.getElementById("search-query").value.trim();
+          const limit = document.getElementById("search-limit").value;
+          const threshold = document.getElementById("search-threshold").value.trim();
+
+          if (!query) {
+            throw new Error("Please enter a search query");
+          }
+
+          // Build query params
+          const params = new URLSearchParams({ query, limit });
+          if (threshold) {
+            params.append("threshold", threshold);
+          }
+
+          const res = await fetch(`/api/clips/search?${params.toString()}`);
+
+          if (!res.ok) {
+            const error = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+            throw new Error(error.error || `Search failed with status ${res.status}`);
+          }
+
+          const data = await res.json();
+
+          // Display results
+          if (data.results && data.results.length > 0) {
+            const summary = document.createElement("p");
+            summary.className = "response-summary";
+            summary.textContent = `Found ${data.count} similar clip${data.count === 1 ? "" : "s"} for "${data.query}"`;
+
+            const grid = document.createElement("div");
+            grid.className = "response-grid";
+            data.results.forEach((clip, index) => {
+              grid.append(createClipCard(clip, index, true));
+            });
+
+            searchResultsEl.innerHTML = "";
+            searchResultsEl.append(summary, grid);
+          } else {
+            searchResultsEl.innerHTML = `
+              <div class="empty-state">
+                <div class="empty-state-icon">🔍</div>
+                <div class="empty-state-text">No similar clips found for "${data.query}"</div>
+              </div>
+            `;
+          }
+        } catch (error) {
+          searchResultsEl.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">⚠️</div>
+              <div class="empty-state-text">Search failed: ${error instanceof Error ? error.message : String(error)}</div>
+            </div>
+          `;
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = "Search";
+        }
+      });
+
+      clearSearchBtn.addEventListener("click", () => {
+        document.getElementById("search-query").value = "";
+        document.getElementById("search-threshold").value = "";
+        searchResultsEl.innerHTML = '<div class="response-empty">Enter a search query above to find similar clips</div>';
       });
 
       // Pagination state
