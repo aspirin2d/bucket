@@ -9,7 +9,8 @@
         box-sizing: border-box;
       }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         margin: 0;
         padding: 1rem;
         background: #f8f9fa;
@@ -54,7 +55,8 @@
         color: #374151;
         margin-bottom: 0.25rem;
       }
-      input, textarea {
+      input,
+      textarea {
         width: 100%;
         padding: 0.5rem;
         border: 1px solid #d1d5db;
@@ -63,7 +65,8 @@
         font-size: 0.875rem;
         transition: border-color 0.15s;
       }
-      input:focus, textarea:focus {
+      input:focus,
+      textarea:focus {
         outline: none;
         border-color: #2563eb;
       }
@@ -178,10 +181,22 @@
         padding: 0.25rem 0.5rem;
         border-radius: 4px;
       }
-      .badge-idle { background: #f3f4f6; color: #6b7280; }
-      .badge-info { background: #dbeafe; color: #1e40af; }
-      .badge-success { background: #d1fae5; color: #065f46; }
-      .badge-error { background: #fee2e2; color: #991b1b; }
+      .badge-idle {
+        background: #f3f4f6;
+        color: #6b7280;
+      }
+      .badge-info {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+      .badge-success {
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .badge-error {
+        background: #fee2e2;
+        color: #991b1b;
+      }
       .response-body {
         padding: 1rem;
         max-height: 600px;
@@ -443,11 +458,21 @@
         background: #d1fae5;
         color: #065f46;
       }
-      .similarity-high { background: #d1fae5; color: #065f46; }
-      .similarity-medium { background: #fef3c7; color: #92400e; }
-      .similarity-low { background: #fee2e2; color: #991b1b; }
+      .similarity-high {
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .similarity-medium {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .similarity-low {
+        background: #fee2e2;
+        color: #991b1b;
+      }
       @media (max-width: 768px) {
-        .form-grid, .clip-grid {
+        .form-grid,
+        .clip-grid {
           grid-template-columns: 1fr;
         }
         .response-grid {
@@ -462,7 +487,9 @@
   <body>
     <div class="container">
       <h1>Clip Upload</h1>
-      <p class="subtitle">Upload videos and define clip ranges for processing</p>
+      <p class="subtitle">
+        Upload videos and define clip ranges for processing
+      </p>
 
       <form id="clip-form">
         <div class="form-grid">
@@ -472,13 +499,22 @@
           </div>
           <div>
             <label>FPS</label>
-            <input type="number" name="fps" min="1" max="240" value="30" required />
+            <input
+              type="number"
+              name="fps"
+              min="1"
+              max="240"
+              value="30"
+              required
+            />
           </div>
         </div>
 
         <div class="section-title">Clips</div>
         <div id="clips-container"></div>
-        <button type="button" id="add-clip" class="btn-success">+ Add Clip</button>
+        <button type="button" id="add-clip" class="btn-success">
+          + Add Clip
+        </button>
 
         <div class="section-title">Video Source</div>
         <div class="form-grid--full">
@@ -489,7 +525,11 @@
           </div>
           <div>
             <label>Video URL</label>
-            <input type="url" name="video_url" placeholder="https://example.com/video.mp4" />
+            <input
+              type="url"
+              name="video_url"
+              placeholder="https://example.com/video.mp4"
+            />
           </div>
         </div>
 
@@ -497,21 +537,37 @@
         <div class="form-grid">
           <div>
             <label>Animation File (.bin)</label>
-            <input type="file" name="animation" accept=".bin,application/octet-stream" />
+            <input
+              type="file"
+              name="animation"
+              accept=".bin,application/octet-stream"
+            />
           </div>
           <div>
             <label>Animation URL</label>
-            <input type="url" name="animation_url" placeholder="https://example.com/anim.bin" />
+            <input
+              type="url"
+              name="animation_url"
+              placeholder="https://example.com/anim.bin"
+            />
           </div>
         </div>
 
-        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Upload Clips</button>
+        <button
+          type="submit"
+          class="btn-primary"
+          style="width: 100%; margin-top: 1rem"
+        >
+          Upload Clips
+        </button>
       </form>
 
       <div class="response-panel">
         <div class="response-header" id="response-toggle">
           <h2 class="response-title">Response</h2>
-          <span id="response-status" class="response-badge badge-idle">Awaiting</span>
+          <span id="response-status" class="response-badge badge-idle"
+            >Awaiting</span
+          >
         </div>
         <div id="response-body" class="response-body">
           <div class="response-empty">(awaiting request)</div>
@@ -537,22 +593,54 @@
           <div class="search-options">
             <div>
               <label>Results Limit</label>
-              <input type="number" id="search-limit" name="limit" min="1" max="100" value="10" />
+              <input
+                type="number"
+                id="search-limit"
+                name="limit"
+                min="1"
+                max="100"
+                value="10"
+              />
               <span class="hint">Max: 100</span>
             </div>
             <div>
               <label>Similarity Threshold</label>
-              <input type="number" id="search-threshold" name="threshold" min="0" max="1" step="0.01" placeholder="Optional (0-1)" />
+              <input
+                type="number"
+                id="search-threshold"
+                name="threshold"
+                min="0"
+                max="1"
+                step="0.01"
+                placeholder="Optional (0-1)"
+              />
               <span class="hint">0.0 - 1.0 (optional)</span>
             </div>
-            <div style="display: flex; align-items: flex-end;">
-              <button type="button" id="clear-search" class="btn-secondary" style="width: 100%;">Clear Results</button>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                max-width: 50%;
+              "
+            >
+              <button
+                type="button"
+                id="clear-search"
+                class="btn-secondary"
+                style="width: 100%"
+              >
+                Clear Results
+              </button>
             </div>
           </div>
         </form>
         <div class="response-panel">
           <div id="search-results" class="response-body">
-            <div class="response-empty">Enter a search query above to find similar clips</div>
+            <div class="response-empty">
+              Enter a search query above to find similar clips
+            </div>
           </div>
         </div>
       </div>
@@ -566,8 +654,10 @@
           <div id="database-clips" class="response-body">
             <div class="response-empty">Loading clips...</div>
           </div>
-          <div id="pagination" class="pagination" style="display: none;">
-            <button id="prev-page" class="btn-secondary" disabled>Previous</button>
+          <div id="pagination" class="pagination" style="display: none">
+            <button id="prev-page" class="btn-secondary" disabled>
+              Previous
+            </button>
             <span id="pagination-info" class="pagination-info">Page 1</span>
             <button id="next-page" class="btn-secondary">Next</button>
           </div>
@@ -577,7 +667,13 @@
 
     <div id="video-modal" class="video-modal">
       <div class="video-modal-content">
-        <button class="video-modal-close" id="close-video-modal" title="Close (Esc)">×</button>
+        <button
+          class="video-modal-close"
+          id="close-video-modal"
+          title="Close (Esc)"
+        >
+          ×
+        </button>
         <video id="modal-video" controls autoplay></video>
       </div>
     </div>
@@ -620,7 +716,13 @@
         responseBodyEl.classList.toggle("collapsed");
       });
 
-      const setResponse = ({ status, tone = "idle", body, bodyNode, emptyClass = false }) => {
+      const setResponse = ({
+        status,
+        tone = "idle",
+        body,
+        bodyNode,
+        emptyClass = false,
+      }) => {
         responseStatusEl.textContent = status;
         responseStatusEl.className = `response-badge badge-${tone}`;
         responseBodyEl.innerHTML = "";
@@ -639,7 +741,7 @@
           return Object.fromEntries(
             Object.entries(value)
               .filter(([key]) => key !== "embedding")
-              .map(([key, val]) => [key, omitEmbeddings(val)])
+              .map(([key, val]) => [key, omitEmbeddings(val)]),
           );
         }
         return value;
@@ -660,7 +762,8 @@
           link.textContent = "→ link";
 
           // Check if this is a video link
-          const isVideoLink = label === "Video" && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(value);
+          const isVideoLink =
+            label === "Video" && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(value);
           if (isVideoLink) {
             link.style.cursor = "pointer";
             link.addEventListener("click", (e) => {
@@ -690,7 +793,8 @@
         const summary = document.createElement("summary");
         summary.textContent = "View raw JSON";
         const pre = document.createElement("pre");
-        pre.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+        pre.textContent =
+          typeof data === "string" ? data : JSON.stringify(data, null, 2);
         details.append(summary, pre);
         return details;
       };
@@ -736,7 +840,7 @@
           createField("Origin", clip.origin_id),
           createField("Frames", `${clip.start_frame} → ${clip.end_frame}`),
           createField("Video", clip.video_url ?? clip.url),
-          createField("Animation", clip.animation_url)
+          createField("Animation", clip.animation_url),
         );
         if (clip.created_at) {
           meta.append(createField("Created", formatTimestamp(clip.created_at)));
@@ -832,10 +936,20 @@
           if (initial) return initial;
           const lastClip = clipsContainer.lastElementChild;
           if (!lastClip) {
-            return { start_frame: 0, end_frame: 90, description: "Opening title card" };
+            return {
+              start_frame: 0,
+              end_frame: 90,
+              description: "Opening title card",
+            };
           }
-          const lastEnd = Number(lastClip.querySelector('[data-field="end"]').value || 0);
-          return { start_frame: lastEnd, end_frame: lastEnd + 60, description: "New clip" };
+          const lastEnd = Number(
+            lastClip.querySelector('[data-field="end"]').value || 0,
+          );
+          return {
+            start_frame: lastEnd,
+            end_frame: lastEnd + 60,
+            description: "New clip",
+          };
         })();
         clipsContainer.appendChild(createClipElement(defaults));
         syncClipNumbers();
@@ -851,7 +965,11 @@
         submitButton.textContent = "Uploading...";
 
         try {
-          setResponse({ status: "Validating", tone: "info", body: "Checking form data..." });
+          setResponse({
+            status: "Validating",
+            tone: "info",
+            body: "Checking form data...",
+          });
 
           const formData = new FormData();
           const videoFile = form.video.files[0];
@@ -865,9 +983,13 @@
 
           const clipEls = clipsContainer.querySelectorAll(".clip");
           const clips = Array.from(clipEls).map((clipEl) => ({
-            start_frame: Number(clipEl.querySelector('[data-field="start"]').value),
+            start_frame: Number(
+              clipEl.querySelector('[data-field="start"]').value,
+            ),
             end_frame: Number(clipEl.querySelector('[data-field="end"]').value),
-            description: clipEl.querySelector('[data-field="description"]').value.trim(),
+            description: clipEl
+              .querySelector('[data-field="description"]')
+              .value.trim(),
           }));
 
           const payload = {
@@ -882,15 +1004,24 @@
           if (videoFile) formData.append("video", videoFile);
           if (animationFile) formData.append("animation", animationFile);
 
-          setResponse({ status: "Uploading", tone: "info", body: "Sending request..." });
+          setResponse({
+            status: "Uploading",
+            tone: "info",
+            body: "Sending request...",
+          });
 
-          const res = await fetch("/api/clips", { method: "POST", body: formData });
+          const res = await fetch("/api/clips", {
+            method: "POST",
+            body: formData,
+          });
           const text = await res.text();
 
           try {
             const parsed = JSON.parse(text);
             setResponse({
-              status: res.ok ? `Success (${res.status})` : `Error (${res.status})`,
+              status: res.ok
+                ? `Success (${res.status})`
+                : `Error (${res.status})`,
               tone: res.ok ? "success" : "error",
               bodyNode: renderResponsePayload(parsed),
             });
@@ -900,7 +1031,9 @@
             }
           } catch (_) {
             setResponse({
-              status: res.ok ? `Success (${res.status})` : `Error (${res.status})`,
+              status: res.ok
+                ? `Success (${res.status})`
+                : `Error (${res.status})`,
               tone: res.ok ? "success" : "error",
               body: text,
             });
@@ -931,7 +1064,9 @@
         try {
           const query = document.getElementById("search-query").value.trim();
           const limit = document.getElementById("search-limit").value;
-          const threshold = document.getElementById("search-threshold").value.trim();
+          const threshold = document
+            .getElementById("search-threshold")
+            .value.trim();
 
           if (!query) {
             throw new Error("Please enter a search query");
@@ -946,8 +1081,12 @@
           const res = await fetch(`/api/clips/search?${params.toString()}`);
 
           if (!res.ok) {
-            const error = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-            throw new Error(error.error || `Search failed with status ${res.status}`);
+            const error = await res
+              .json()
+              .catch(() => ({ error: `HTTP ${res.status}` }));
+            throw new Error(
+              error.error || `Search failed with status ${res.status}`,
+            );
           }
 
           const data = await res.json();
@@ -990,7 +1129,8 @@
       clearSearchBtn.addEventListener("click", () => {
         document.getElementById("search-query").value = "";
         document.getElementById("search-threshold").value = "";
-        searchResultsEl.innerHTML = '<div class="response-empty">Enter a search query above to find similar clips</div>';
+        searchResultsEl.innerHTML =
+          '<div class="response-empty">Enter a search query above to find similar clips</div>';
       });
 
       // Pagination state
@@ -1006,7 +1146,9 @@
       const loadDatabaseClips = async () => {
         try {
           const offset = (currentPage - 1) * itemsPerPage;
-          const res = await fetch(`/api/clips?limit=${itemsPerPage}&offset=${offset}`);
+          const res = await fetch(
+            `/api/clips?limit=${itemsPerPage}&offset=${offset}`,
+          );
 
           if (!res.ok) {
             throw new Error(`Failed to fetch clips: ${res.status}`);
